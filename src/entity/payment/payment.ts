@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from "typeorm";
-import { PaymentType, PaymentStatus } from "@/enums/payment";
+import { PaymentType, PaymentStatus } from "../../enums/payment";
 import { Beneficiary } from "../beneficiary/beneficiary";
 import { Deal } from "../deal/deal";
 
@@ -49,4 +49,7 @@ export class Payment {
 
     @UpdateDateColumn()
     updatedAt!: Date;
+
+    @Column({ type: "datetime", nullable: true })
+    processedAt?: Date;
 } 

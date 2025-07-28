@@ -1,5 +1,6 @@
 export enum DealStatus {
   DRAFT = 'DRAFT',
+  CONFIRMED = 'CONFIRMED',
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
@@ -7,6 +8,8 @@ export enum DealStatus {
 
 export enum StepStatus {
   DRAFT = 'DRAFT',
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',

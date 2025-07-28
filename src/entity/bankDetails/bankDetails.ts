@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from "typeorm";
-import { BankDetailsType } from "@/enums/bankDetails";
+import { BankDetailsType } from "../../enums/bankDetails";
 import { Beneficiary } from "../beneficiary/beneficiary";
 
 @Entity()
@@ -16,8 +16,17 @@ export class BankDetails {
     @Column({ default: false })
     isDefault!: boolean;
 
+    @Column({ default: 'PENDING' })
+    status!: string;
+
+    @Column({ nullable: true })
+    bankName?: string;
+
     @Column({ nullable: true })
     bik?: string;
+
+    @Column({ nullable: true })
+    bic?: string;
 
     @Column({ nullable: true })
     accountNumber?: string;
@@ -26,7 +35,22 @@ export class BankDetails {
     cardNumber?: string;
 
     @Column({ nullable: true })
+    cardHolderName?: string;
+
+    @Column({ type: "date", nullable: true })
+    expiryDate?: Date;
+
+    @Column({ nullable: true })
     sbpId?: string;
+
+    @Column({ type: "datetime", nullable: true })
+    approvedAt?: Date;
+
+    @Column({ type: "datetime", nullable: true })
+    rejectedAt?: Date;
+
+    @Column({ nullable: true })
+    rejectionReason?: string;
 
     @ManyToOne(() => Beneficiary)
     @JoinColumn({ name: "beneficiaryId" })

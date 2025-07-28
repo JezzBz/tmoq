@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, UpdateDateColumn } from "typeorm";
-import { DealStatus } from "@/enums/deal";
+import { DealStatus } from "../../enums/deal";
 import { Beneficiary } from "../beneficiary/beneficiary";
 import { Payment } from "../payment/payment";
 import { Step } from "./step";

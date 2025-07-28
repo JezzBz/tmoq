@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from "typeorm";
-import { AddressType } from "@/enums";
+import { AddressType } from "../../enums/beneficiary";
 import { Beneficiary } from "./beneficiary";
 
 @Entity()

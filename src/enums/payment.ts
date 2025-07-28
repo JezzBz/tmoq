@@ -1,6 +1,7 @@
 export enum PaymentType {
   REGULAR = 'REGULAR',
   DEAL = 'DEAL',
+  BENEFICIARY_PAYMENT = 'BENEFICIARY_PAYMENT',
 }
 
 export enum PaymentStatus {

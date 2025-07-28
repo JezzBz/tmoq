@@ -1,0 +1,9 @@
+export enum BenefeciaryType {
+    FL_RESIDENT,
+    FL_NONRESIDENT,
+    UL_RESIDENT, 
+    UL_NONRESIDENT,
+    IP_RESIDENT, 
+    IP_NONRESIDENT, 
+    LITE_CONTACT
+}

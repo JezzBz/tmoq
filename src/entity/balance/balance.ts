@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, UpdateDateColumn } from "typeorm";
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, UpdateDateColumn, CreateDateColumn } from "typeorm";
 import { Beneficiary } from "../beneficiary/beneficiary";
 
 @Entity()
@@ -21,6 +21,9 @@ export class Balance {
     @Column({ type: "decimal", precision: 15, scale: 2, default: 0 })
     available!: number;
 
+    @Column({ nullable: true })
+    description?: string;
+
     @ManyToOne(() => Beneficiary)
     @JoinColumn({ name: "beneficiaryId" })
     beneficiary!: Beneficiary;
@@ -28,6 +31,12 @@ export class Balance {
     @Column()
     beneficiaryId!: number;
 
+    @CreateDateColumn()
+    createdAt!: Date;
+
     @UpdateDateColumn()
     updatedAt!: Date;
+
+    @Column({ type: "datetime", nullable: true })
+    lastUpdated?: Date;
 } 

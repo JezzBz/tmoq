@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, JoinColumn, CreateDateColumn, UpdateDateColumn } from "typeorm";
-import { StepStatus } from "@/enums/deal";
+import { StepStatus } from "../../enums/deal";
 import { Deal } from "./deal";
 import { Deponent } from "./deponent";
 import { Recipient } from "./recipient";
@@ -46,4 +46,13 @@ export class Step {
 
     @UpdateDateColumn()
     updatedAt!: Date;
+
+    @Column({ type: "datetime", nullable: true })
+    startedAt?: Date;
+
+    @Column({ type: "datetime", nullable: true })
+    completedAt?: Date;
+
+    @Column({ type: "datetime", nullable: true })
+    cancelledAt?: Date;
 } 

@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from "typeorm";
-import { DocumentType } from "@/enums/beneficiary";
+import { DocumentType } from "../../enums/beneficiary";
 import { Beneficiary } from "./beneficiary";
 
 @Entity()

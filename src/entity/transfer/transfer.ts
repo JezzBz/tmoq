@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
-import { TransferType } from "@/enums/transfer";
-import { PaymentStatus } from "@/enums/payment";
+import { TransferType } from "../../enums/transfer";
+import { PaymentStatus } from "../../enums/payment";
 
 @Entity()
 export class Transfer {
@@ -37,4 +37,25 @@ export class Transfer {
 
     @UpdateDateColumn()
     updatedAt!: Date;
+
+    @Column({ nullable: true })
+    description?: string;
+
+    @Column({ type: "datetime", nullable: true })
+    executedAt?: Date;
+
+    @Column({ nullable: true })
+    fromBeneficiaryId?: number;
+
+    @Column({ nullable: true })
+    toBeneficiaryId?: number;
+
+    @Column({ type: "datetime", nullable: true })
+    failedAt?: Date;
+
+    @Column({ nullable: true })
+    failureReason?: string;
+
+    @Column({ type: "datetime", nullable: true })
+    cancelledAt?: Date;
 } 

@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn } from "typeorm";
-import { BenefeciaryType } from "@/enums";
+import { BenefeciaryType } from "../../enums/benefeciaryType";
 import { Address } from "./address";
 import { Document } from "./document";
 
