@@ -21,6 +21,9 @@ export class Step {
     @Column({ length: 3 })
     currency!: string;
 
+    @Column({ type: "int", default: 1 })
+    stepNumber!: number;
+
     @Column({
         type: "varchar",
         length: 50,

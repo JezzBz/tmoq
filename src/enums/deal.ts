@@ -10,6 +10,7 @@ export enum DealStatus {
 
 export enum StepStatus {
   DRAFT = 'DRAFT',
+  NEW = 'NEW',
   PENDING = 'PENDING',
   IN_PROGRESS = 'IN_PROGRESS',
   ACTIVE = 'ACTIVE',

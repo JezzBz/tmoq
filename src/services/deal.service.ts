@@ -250,42 +250,135 @@ export class DealService extends BaseService<Deal> {
     return await this.findById(id);
   }
 
-  // Методы для работы с этапами
-  async getSteps(dealId: string): Promise<Step[]> {
-    return await this.stepRepository.find({
-      where: { deal: { dealId } },
-      relations: ['deponents', 'recipients']
-    });
-  }
+  // Методы управления этапами сделок
 
-  async getStepById(stepId: string): Promise<Step | null> {
-    return await this.stepRepository.findOne({
-      where: { stepId },
-      relations: ['deponents', 'recipients', 'deal']
+  async getSteps(dealId: string, offset: number = 0, limit: number = 50): Promise<{ offset: number; limit: number; size: number; total: number; results: any[] }> {
+    const [steps, total] = await this.stepRepository.findAndCount({
+      where: { deal: { dealId } },
+      order: { stepNumber: 'ASC' },
+      skip: offset,
+      take: limit
     });
+
+    const formattedSteps = steps.map(step => ({
+      dealId: step.dealId,
+      stepId: step.stepId,
+      stepNumber: step.stepNumber,
+      description: step.description,
+      status: step.status
+    }));
+
+    return {
+      offset,
+      limit,
+      size: formattedSteps.length,
+      total,
+      results: formattedSteps
+    };
   }
 
   async createStep(dealId: string, stepData: Partial<Step>): Promise<Step> {
+    // Проверяем существование сделки
     const deal = await this.findById(dealId);
     if (!deal) {
       throw new Error('Deal not found');
     }
 
+    // Получаем следующий номер этапа
+    const existingSteps = await this.stepRepository.find({
+      where: { deal: { dealId } },
+      order: { stepNumber: 'DESC' },
+      take: 1
+    });
+
+    const nextStepNumber = existingSteps.length > 0 ? existingSteps[0].stepNumber + 1 : 1;
+
     const step = this.stepRepository.create({
       ...stepData,
-      deal
+      dealId,
+      stepNumber: nextStepNumber,
+      status: StepStatus.NEW,
+      title: stepData.title || `Этап ${nextStepNumber}`,
+      amount: stepData.amount || 0,
+      currency: stepData.currency || 'RUB'
     });
+
     return await this.stepRepository.save(step);
   }
 
-  async updateStep(stepId: string, stepData: Partial<Step>): Promise<Step | null> {
-    await this.stepRepository.update(stepId, stepData);
-    return await this.getStepById(stepId);
+  async getStepById(dealId: string, stepId: string): Promise<Step | null> {
+    return await this.stepRepository.findOne({
+      where: { stepId, deal: { dealId } }
+    });
   }
 
-  async deleteStep(stepId: string): Promise<boolean> {
-    const result = await this.stepRepository.delete(stepId);
+  async updateStep(dealId: string, stepId: string, stepData: Partial<Step>): Promise<Step | null> {
+    // Проверяем существование сделки и этапа
+    const deal = await this.findById(dealId);
+    if (!deal) {
+      throw new Error('Deal not found');
+    }
+
+    if (deal.status !== DealStatus.DRAFT) {
+      throw new Error('Only draft deals can be modified');
+    }
+
+    const step = await this.getStepById(dealId, stepId);
+    if (!step) {
+      throw new Error('Step not found');
+    }
+
+    await this.stepRepository.update({ stepId }, stepData);
+    return await this.getStepById(dealId, stepId);
+  }
+
+  async deleteStep(dealId: string, stepId: string): Promise<boolean> {
+    // Проверяем существование сделки
+    const deal = await this.findById(dealId);
+    if (!deal) {
+      return false;
+    }
+
+    if (deal.status !== DealStatus.DRAFT) {
+      throw new Error('Only draft deals can be modified');
+    }
+
+    const step = await this.getStepById(dealId, stepId);
+    if (!step) {
+      return false;
+    }
+
+    const result = await this.stepRepository.delete({ stepId });
     return result.affected ? result.affected > 0 : false;
+  }
+
+  async completeStep(dealId: string, stepId: string): Promise<Step | null> {
+    // Проверяем существование сделки и этапа
+    const deal = await this.findById(dealId);
+    if (!deal) {
+      throw new Error('Deal not found');
+    }
+
+    const step = await this.getStepById(dealId, stepId);
+    if (!step) {
+      throw new Error('Step not found');
+    }
+
+    // Проверяем, что этап можно завершить
+    if (step.status === StepStatus.COMPLETED) {
+      throw new Error('Step is already completed');
+    }
+
+    if (step.status === StepStatus.CANCELLED) {
+      throw new Error('Cancelled steps cannot be completed');
+    }
+
+    await this.stepRepository.update({ stepId }, { 
+      status: StepStatus.COMPLETED,
+      completedAt: new Date()
+    });
+
+    return await this.getStepById(dealId, stepId);
   }
 
   // Методы для работы с депонентами
@@ -314,7 +407,10 @@ export class DealService extends BaseService<Deal> {
   }
 
   async createOrUpdateDeponent(stepId: string, deponentData: Partial<Deponent>): Promise<Deponent> {
-    const step = await this.getStepById(stepId);
+    const step = await this.stepRepository.findOne({
+      where: { stepId },
+      relations: ['deal']
+    });
     if (!step) {
       throw new Error('Step not found');
     }
@@ -397,7 +493,10 @@ export class DealService extends BaseService<Deal> {
   }
 
   async createRecipient(stepId: string, recipientData: Partial<Recipient>): Promise<Recipient> {
-    const step = await this.getStepById(stepId);
+    const step = await this.stepRepository.findOne({
+      where: { stepId },
+      relations: ['deal']
+    });
     if (!step) {
       throw new Error('Step not found');
     }
@@ -442,7 +541,10 @@ export class DealService extends BaseService<Deal> {
     }
 
     // Проверяем статус сделки
-    const step = await this.getStepById(recipient.stepId);
+    const step = await this.stepRepository.findOne({
+      where: { stepId: recipient.stepId },
+      relations: ['deal']
+    });
     if (!step) {
       throw new Error('Step not found');
     }
@@ -463,7 +565,10 @@ export class DealService extends BaseService<Deal> {
     }
 
     // Проверяем статус сделки
-    const step = await this.getStepById(recipient.stepId);
+    const step = await this.stepRepository.findOne({
+      where: { stepId: recipient.stepId },
+      relations: ['deal']
+    });
     if (!step) {
       throw new Error('Step not found');
     }
@@ -484,7 +589,10 @@ export class DealService extends BaseService<Deal> {
     }
 
     // Проверяем статус сделки - только DRAFT сделки можно редактировать
-    const step = await this.getStepById(recipient.stepId);
+    const step = await this.stepRepository.findOne({
+      where: { stepId: recipient.stepId },
+      relations: ['deal']
+    });
     if (!step || step.deal.status !== DealStatus.DRAFT) {
       throw new Error('Only draft deals can be modified');
     }

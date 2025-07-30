@@ -164,28 +164,29 @@ router.delete('/:dealId', async (req: Request, res: Response) => {
 
 // Маршруты для этапов сделок
 
-// POST /api/v1/deals/{dealId}/steps - Создать этап сделки
+// POST /api/v1/deals/{dealId}/steps - Создать этап сделки (5.2)
 router.post('/:dealId/steps', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
     const stepData = req.body;
+    const idempotencyKey = req.headers['idempotency-key'] as string;
     
-    // Валидация обязательных полей
-    if (!stepData.title || !stepData.amount || !stepData.currency) {
+    if (!idempotencyKey) {
       return res.status(400).json({
-        error: 'title, amount, and currency are required'
-      });
-    }
-    
-    if (stepData.amount <= 0) {
-      return res.status(400).json({
-        error: 'Amount must be greater than zero'
+        error: 'Idempotency-Key header is required'
       });
     }
     
     const step = await services.dealService.createStep(dealId, stepData);
     
-    return res.status(201).json(step);
+    // Форматируем ответ согласно спецификации
+    return res.status(201).json({
+      dealId: step.dealId,
+      stepId: step.stepId,
+      stepNumber: step.stepNumber,
+      description: step.description,
+      status: step.status
+    });
   } catch (error) {
     console.error('Error creating step:', error);
     return res.status(400).json({
@@ -195,12 +196,13 @@ router.post('/:dealId/steps', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/deals/{dealId}/steps - Получить все этапы сделки
+// GET /api/v1/deals/{dealId}/steps - Получить все этапы сделки (5.1)
 router.get('/:dealId/steps', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
+    const { offset = 0, limit = 50 } = req.query;
     
-    const steps = await services.dealService.getSteps(dealId);
+    const steps = await services.dealService.getSteps(dealId, Number(offset), Number(limit));
     
     return res.json(steps);
   } catch (error) {
@@ -582,6 +584,115 @@ router.post('/:dealId/accept', async (req: Request, res: Response) => {
     console.error('Error accepting deal:', error);
     return res.status(400).json({
       error: 'Failed to accept deal',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}); 
+
+// Маршруты управления этапами сделок
+
+// 5.3 POST /api/v1/deals/{dealId}/steps/{stepId}/complete - Завершить этап
+router.post('/:dealId/steps/:stepId/complete', async (req: Request, res: Response) => {
+  try {
+    const { dealId, stepId } = req.params;
+    
+    const step = await services.dealService.completeStep(dealId, stepId);
+    
+    if (!step) {
+      return res.status(404).json({
+        error: 'Step not found'
+      });
+    }
+
+    return res.status(200).send();
+  } catch (error) {
+    console.error('Error completing step:', error);
+    return res.status(400).json({
+      error: 'Failed to complete step',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 5.4 GET /api/v1/deals/{dealId}/steps/{stepId} - Получить этап по ID
+router.get('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
+  try {
+    const { dealId, stepId } = req.params;
+    
+    const step = await services.dealService.getStepById(dealId, stepId);
+    
+    if (!step) {
+      return res.status(404).json({
+        error: 'Step not found'
+      });
+    }
+
+    // Форматируем ответ согласно спецификации
+    return res.json({
+      dealId: step.dealId,
+      stepId: step.stepId,
+      stepNumber: step.stepNumber,
+      description: step.description,
+      status: step.status
+    });
+  } catch (error) {
+    console.error('Error getting step:', error);
+    return res.status(500).json({
+      error: 'Failed to get step',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 5.5 PUT /api/v1/deals/{dealId}/steps/{stepId} - Обновить этап
+router.put('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
+  try {
+    const { dealId, stepId } = req.params;
+    const stepData = req.body;
+    
+    const step = await services.dealService.updateStep(dealId, stepId, stepData);
+    
+    if (!step) {
+      return res.status(404).json({
+        error: 'Step not found'
+      });
+    }
+
+    // Форматируем ответ согласно спецификации
+    return res.json({
+      dealId: step.dealId,
+      stepId: step.stepId,
+      stepNumber: step.stepNumber,
+      description: step.description,
+      status: step.status
+    });
+  } catch (error) {
+    console.error('Error updating step:', error);
+    return res.status(400).json({
+      error: 'Failed to update step',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 5.6 DELETE /api/v1/deals/{dealId}/steps/{stepId} - Удалить этап
+router.delete('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
+  try {
+    const { dealId, stepId } = req.params;
+    
+    const success = await services.dealService.deleteStep(dealId, stepId);
+    
+    if (!success) {
+      return res.status(404).json({
+        error: 'Step not found'
+      });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting step:', error);
+    return res.status(400).json({
+      error: 'Failed to delete step',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
