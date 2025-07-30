@@ -3,6 +3,186 @@ import { services } from '../config/services';
 
 const router: Router = Router();
 
+// Базовые CRUD операции для сделок
+
+// POST /api/v1/deals - Создать сделку
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const dealData = req.body;
+    
+    // Валидация обязательных полей
+    if (!dealData.beneficiaryId || !dealData.title || !dealData.amount || !dealData.currency) {
+      return res.status(400).json({
+        error: 'beneficiaryId, title, amount, and currency are required'
+      });
+    }
+    
+    if (dealData.amount <= 0) {
+      return res.status(400).json({
+        error: 'Amount must be greater than zero'
+      });
+    }
+    
+    const deal = await services.dealService.createDeal(dealData);
+    
+    return res.status(201).json(deal);
+  } catch (error) {
+    console.error('Error creating deal:', error);
+    return res.status(400).json({
+      error: 'Failed to create deal',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// GET /api/v1/deals - Получить все сделки
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const { offset = 0, limit = 50 } = req.query;
+    
+    const deals = await services.dealService.findAll();
+    
+    // Применяем пагинацию
+    const startIndex = Number(offset);
+    const endIndex = startIndex + Number(limit);
+    const paginatedDeals = deals.slice(startIndex, endIndex);
+    
+    return res.json({
+      offset: Number(offset),
+      limit: Number(limit),
+      size: paginatedDeals.length,
+      total: deals.length,
+      results: paginatedDeals
+    });
+  } catch (error) {
+    console.error('Error getting deals:', error);
+    return res.status(500).json({
+      error: 'Failed to get deals',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// GET /api/v1/deals/{dealId} - Получить сделку по ID
+router.get('/:dealId', async (req: Request, res: Response) => {
+  try {
+    const { dealId } = req.params;
+    
+    const deal = await services.dealService.findById(dealId);
+    
+    if (!deal) {
+      return res.status(404).json({
+        error: 'Deal not found'
+      });
+    }
+
+    return res.json(deal);
+  } catch (error) {
+    console.error('Error getting deal:', error);
+    return res.status(500).json({
+      error: 'Failed to get deal',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// PUT /api/v1/deals/{dealId} - Обновить сделку
+router.put('/:dealId', async (req: Request, res: Response) => {
+  try {
+    const { dealId } = req.params;
+    const updateData = req.body;
+    
+    const deal = await services.dealService.updateDeal(dealId, updateData);
+    
+    if (!deal) {
+      return res.status(404).json({
+        error: 'Deal not found'
+      });
+    }
+
+    return res.json(deal);
+  } catch (error) {
+    console.error('Error updating deal:', error);
+    return res.status(400).json({
+      error: 'Failed to update deal',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// DELETE /api/v1/deals/{dealId} - Удалить сделку
+router.delete('/:dealId', async (req: Request, res: Response) => {
+  try {
+    const { dealId } = req.params;
+    
+    const success = await services.dealService.deleteDeal(dealId);
+    
+    if (!success) {
+      return res.status(404).json({
+        error: 'Deal not found'
+      });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting deal:', error);
+    return res.status(500).json({
+      error: 'Failed to delete deal',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Маршруты для этапов сделок
+
+// POST /api/v1/deals/{dealId}/steps - Создать этап сделки
+router.post('/:dealId/steps', async (req: Request, res: Response) => {
+  try {
+    const { dealId } = req.params;
+    const stepData = req.body;
+    
+    // Валидация обязательных полей
+    if (!stepData.title || !stepData.amount || !stepData.currency) {
+      return res.status(400).json({
+        error: 'title, amount, and currency are required'
+      });
+    }
+    
+    if (stepData.amount <= 0) {
+      return res.status(400).json({
+        error: 'Amount must be greater than zero'
+      });
+    }
+    
+    const step = await services.dealService.createStep(dealId, stepData);
+    
+    return res.status(201).json(step);
+  } catch (error) {
+    console.error('Error creating step:', error);
+    return res.status(400).json({
+      error: 'Failed to create step',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// GET /api/v1/deals/{dealId}/steps - Получить все этапы сделки
+router.get('/:dealId/steps', async (req: Request, res: Response) => {
+  try {
+    const { dealId } = req.params;
+    
+    const steps = await services.dealService.getSteps(dealId);
+    
+    return res.json(steps);
+  } catch (error) {
+    console.error('Error getting steps:', error);
+    return res.status(500).json({
+      error: 'Failed to get steps',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // 3.1 GET /api/v1/deals/{dealId}/steps/{stepId}/recipients/{recipientId} - Получить реципиента по ID
 router.get('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Request, res: Response) => {
   try {
@@ -31,6 +211,19 @@ router.put('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Request
   try {
     const { dealId, stepId, recipientId } = req.params;
     const updateData = req.body;
+    
+    // Валидация обязательных полей
+    if (!updateData.beneficiaryId || !updateData.amount || !updateData.purpose || !updateData.bankDetailsId) {
+      return res.status(400).json({
+        error: 'beneficiaryId, amount, purpose, and bankDetailsId are required'
+      });
+    }
+    
+    if (updateData.amount <= 0) {
+      return res.status(400).json({
+        error: 'Amount must be greater than zero'
+      });
+    }
     
     const recipient = await services.dealService.updateRecipient(recipientId, updateData);
     
@@ -78,9 +271,7 @@ router.get('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Reques
   try {
     const { dealId, stepId, beneficiaryId } = req.params;
     
-    // Получаем всех депонентов этапа и ищем по beneficiaryId
-    const deponents = await services.dealService.getDeponents(stepId);
-    const deponent = deponents.find(d => d.beneficiaryId === beneficiaryId);
+    const deponent = await services.dealService.getDeponentByBeneficiaryId(stepId, beneficiaryId);
     
     if (!deponent) {
       return res.status(404).json({
@@ -103,6 +294,12 @@ router.put('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Reques
   try {
     const { dealId, stepId, beneficiaryId } = req.params;
     const { amount } = req.body;
+    
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        error: 'Amount is required and must be greater than zero'
+      });
+    }
     
     const deponentData = {
       stepId,
@@ -127,17 +324,7 @@ router.delete('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Req
   try {
     const { dealId, stepId, beneficiaryId } = req.params;
     
-    // Получаем всех депонентов этапа и ищем по beneficiaryId
-    const deponents = await services.dealService.getDeponents(stepId);
-    const deponent = deponents.find(d => d.beneficiaryId === beneficiaryId);
-    
-    if (!deponent) {
-      return res.status(404).json({
-        error: 'Deponent not found'
-      });
-    }
-    
-    const success = await services.dealService.deleteDeponent(deponent.deponentId);
+    const success = await services.dealService.deleteDeponentByBeneficiaryId(stepId, beneficiaryId);
     
     if (!success) {
       return res.status(404).json({
@@ -190,15 +377,13 @@ router.post('/:dealId/steps/:stepId/recipients/:recipientId/update-bank-details'
     const { dealId, stepId, recipientId } = req.params;
     const { bankDetailsId } = req.body;
     
-    const recipient = await services.dealService.getRecipientById(recipientId);
-    
-    if (!recipient) {
-      return res.status(404).json({
-        error: 'Recipient not found'
+    if (!bankDetailsId) {
+      return res.status(400).json({
+        error: 'bankDetailsId is required'
       });
     }
     
-    const updatedRecipient = await services.dealService.updateRecipient(recipientId, { bankDetailsId });
+    const updatedRecipient = await services.dealService.updateRecipientBankDetails(recipientId, bankDetailsId);
     
     if (!updatedRecipient) {
       return res.status(404).json({
@@ -255,6 +440,19 @@ router.post('/:dealId/steps/:stepId/recipients', async (req: Request, res: Respo
     if (!idempotencyKey) {
       return res.status(400).json({
         error: 'Idempotency-Key header is required'
+      });
+    }
+    
+    // Валидация обязательных полей
+    if (!recipientData.beneficiaryId || !recipientData.amount || !recipientData.purpose || !recipientData.bankDetailsId) {
+      return res.status(400).json({
+        error: 'beneficiaryId, amount, purpose, and bankDetailsId are required'
+      });
+    }
+    
+    if (recipientData.amount <= 0) {
+      return res.status(400).json({
+        error: 'Amount must be greater than zero'
       });
     }
     

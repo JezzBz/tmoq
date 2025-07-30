@@ -11,6 +11,15 @@ export class Recipient {
     @Column({ type: "decimal", precision: 15, scale: 2 })
     amount!: number;
 
+    @Column({ type: "decimal", precision: 15, scale: 2, nullable: true })
+    tax?: number;
+
+    @Column({ type: "text", nullable: true })
+    purpose?: string;
+
+    @Column({ type: "boolean", default: false })
+    keepOnVirtualAccount!: boolean;
+
     @ManyToOne(() => Step, step => step.recipients)
     @JoinColumn({ name: "stepId" })
     step!: Step;

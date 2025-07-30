@@ -186,7 +186,8 @@ export class DealService extends BaseService<Deal> {
   // Методы для работы с депонентами
   async getDeponents(stepId: string): Promise<Deponent[]> {
     return await this.deponentRepository.find({
-      where: { step: { stepId } }
+      where: { step: { stepId } },
+      relations: ['step', 'beneficiary']
     });
   }
 
@@ -197,35 +198,96 @@ export class DealService extends BaseService<Deal> {
     });
   }
 
+  async getDeponentByBeneficiaryId(stepId: string, beneficiaryId: string): Promise<Deponent | null> {
+    return await this.deponentRepository.findOne({
+      where: { 
+        step: { stepId },
+        beneficiary: { beneficiaryId }
+      },
+      relations: ['step', 'beneficiary']
+    });
+  }
+
   async createOrUpdateDeponent(stepId: string, deponentData: Partial<Deponent>): Promise<Deponent> {
     const step = await this.getStepById(stepId);
     if (!step) {
       throw new Error('Step not found');
     }
 
-    const deponent = this.deponentRepository.create({
-      ...deponentData,
-      step
-    });
-    return await this.deponentRepository.save(deponent);
+    // Проверяем статус сделки - только DRAFT сделки можно редактировать
+    if (step.deal.status !== DealStatus.DRAFT) {
+      throw new Error('Only draft deals can be modified');
+    }
+
+    // Проверяем существование бенефициара
+    if (deponentData.beneficiaryId) {
+      const beneficiary = await this.beneficiaryRepository.findOne({
+        where: { beneficiaryId: deponentData.beneficiaryId }
+      });
+      if (!beneficiary) {
+        throw new Error('Beneficiary not found');
+      }
+    }
+
+    // Ищем существующего депонента
+    const existingDeponent = await this.getDeponentByBeneficiaryId(stepId, deponentData.beneficiaryId!);
+    
+    if (existingDeponent) {
+      // Обновляем существующего депонента
+      await this.deponentRepository.update(existingDeponent.deponentId, {
+        amount: deponentData.amount
+      });
+      const updatedDeponent = await this.getDeponentById(existingDeponent.deponentId);
+      if (!updatedDeponent) {
+        throw new Error('Failed to update deponent');
+      }
+      return updatedDeponent;
+    } else {
+      // Создаем нового депонента
+      const deponent = this.deponentRepository.create({
+        ...deponentData,
+        step
+      });
+      return await this.deponentRepository.save(deponent);
+    }
   }
 
   async deleteDeponent(deponentId: string): Promise<boolean> {
+    const deponent = await this.getDeponentById(deponentId);
+    if (!deponent) {
+      return false;
+    }
+
+    // Проверяем статус сделки - только DRAFT сделки можно редактировать
+    if (deponent.step.deal.status !== DealStatus.DRAFT) {
+      throw new Error('Only draft deals can be modified');
+    }
+
     const result = await this.deponentRepository.delete(deponentId);
     return result.affected ? result.affected > 0 : false;
+  }
+
+  async deleteDeponentByBeneficiaryId(stepId: string, beneficiaryId: string): Promise<boolean> {
+    const deponent = await this.getDeponentByBeneficiaryId(stepId, beneficiaryId);
+    if (!deponent) {
+      return false;
+    }
+
+    return await this.deleteDeponent(deponent.deponentId);
   }
 
   // Методы для работы с реципиентами
   async getRecipients(stepId: string): Promise<Recipient[]> {
     return await this.recipientRepository.find({
-      where: { step: { stepId } }
+      where: { step: { stepId } },
+      relations: ['step', 'beneficiary', 'bankDetails']
     });
   }
 
   async getRecipientById(recipientId: string): Promise<Recipient | null> {
     return await this.recipientRepository.findOne({
       where: { recipientId },
-      relations: ['step', 'beneficiary']
+      relations: ['step', 'beneficiary', 'bankDetails']
     });
   }
 
@@ -233,6 +295,32 @@ export class DealService extends BaseService<Deal> {
     const step = await this.getStepById(stepId);
     if (!step) {
       throw new Error('Step not found');
+    }
+
+    // Проверяем статус сделки - только DRAFT сделки можно редактировать
+    if (step.deal.status !== DealStatus.DRAFT) {
+      throw new Error('Only draft deals can be modified');
+    }
+
+    // Проверяем существование бенефициара
+    if (recipientData.beneficiaryId) {
+      const beneficiary = await this.beneficiaryRepository.findOne({
+        where: { beneficiaryId: recipientData.beneficiaryId }
+      });
+      if (!beneficiary) {
+        throw new Error('Beneficiary not found');
+      }
+    }
+
+    // Проверяем существование банковских реквизитов
+    if (recipientData.bankDetailsId) {
+      // Здесь нужно добавить проверку банковских реквизитов
+      // const bankDetails = await this.bankDetailsRepository.findOne({
+      //   where: { bankDetailsId: recipientData.bankDetailsId }
+      // });
+      // if (!bankDetails) {
+      //   throw new Error('Bank details not found');
+      // }
     }
 
     const recipient = this.recipientRepository.create({
@@ -243,11 +331,59 @@ export class DealService extends BaseService<Deal> {
   }
 
   async updateRecipient(recipientId: string, recipientData: Partial<Recipient>): Promise<Recipient | null> {
+    const recipient = await this.getRecipientById(recipientId);
+    if (!recipient) {
+      return null;
+    }
+
+    // Проверяем статус сделки
+    const step = await this.getStepById(recipient.stepId);
+    if (!step) {
+      throw new Error('Step not found');
+    }
+
+    // Для обновлений разрешаем только DRAFT сделки
+    if (step.deal.status !== DealStatus.DRAFT) {
+      throw new Error('Only draft deals can be modified');
+    }
+
     await this.recipientRepository.update(recipientId, recipientData);
     return await this.getRecipientById(recipientId);
   }
 
+  async updateRecipientBankDetails(recipientId: string, bankDetailsId: string): Promise<Recipient | null> {
+    const recipient = await this.getRecipientById(recipientId);
+    if (!recipient) {
+      return null;
+    }
+
+    // Проверяем статус сделки
+    const step = await this.getStepById(recipient.stepId);
+    if (!step) {
+      throw new Error('Step not found');
+    }
+
+    // Для обновления банковских реквизитов разрешаем только сделки в статусе PAYMENT_FAILED
+    if (step.deal.status !== DealStatus.PAYMENT_FAILED) {
+      throw new Error('Bank details can only be updated for deals in PAYMENT_FAILED status');
+    }
+
+    await this.recipientRepository.update(recipientId, { bankDetailsId });
+    return await this.getRecipientById(recipientId);
+  }
+
   async deleteRecipient(recipientId: string): Promise<boolean> {
+    const recipient = await this.getRecipientById(recipientId);
+    if (!recipient) {
+      return false;
+    }
+
+    // Проверяем статус сделки - только DRAFT сделки можно редактировать
+    const step = await this.getStepById(recipient.stepId);
+    if (!step || step.deal.status !== DealStatus.DRAFT) {
+      throw new Error('Only draft deals can be modified');
+    }
+
     const result = await this.recipientRepository.delete(recipientId);
     return result.affected ? result.affected > 0 : false;
   }
