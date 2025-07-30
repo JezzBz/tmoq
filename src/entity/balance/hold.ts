@@ -3,8 +3,8 @@ import { Beneficiary } from "../beneficiary/beneficiary";
 
 @Entity()
 export class Hold {
-    @PrimaryGeneratedColumn()
-    holdId!: number;
+    @PrimaryGeneratedColumn("uuid")
+    holdId!: string;
 
     @Column()
     accountId!: string;
@@ -26,9 +26,9 @@ export class Hold {
     beneficiary!: Beneficiary;
 
     @Column()
-    beneficiaryId!: number;
+    beneficiaryId!: string;
 
-    @Column({ type: "timestamp", nullable: true })
+    @Column({ type: "datetime", nullable: true })
     expiresAt?: Date;
 
     @Column({ type: "datetime", nullable: true })

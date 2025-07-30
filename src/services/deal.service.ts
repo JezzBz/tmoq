@@ -31,7 +31,7 @@ export class DealService extends BaseService<Deal> {
     this.beneficiaryRepository = beneficiaryRepository;
   }
 
-  async findById(id: number): Promise<Deal | null> {
+  async findById(id: string): Promise<Deal | null> {
     return await this.repository.findOne({
       where: { dealId: id },
       relations: ['beneficiary', 'steps', 'payments']
@@ -59,7 +59,7 @@ export class DealService extends BaseService<Deal> {
     return await this.repository.save(deal);
   }
 
-  async updateDeal(id: number, data: Partial<Deal>): Promise<Deal | null> {
+  async updateDeal(id: string, data: Partial<Deal>): Promise<Deal | null> {
     // Валидация данных
     this.validateDealData(data);
     
@@ -67,7 +67,7 @@ export class DealService extends BaseService<Deal> {
     return await this.findById(id);
   }
 
-  async deleteDeal(id: number): Promise<boolean> {
+  async deleteDeal(id: string): Promise<boolean> {
     const deal = await this.findById(id);
     if (!deal) {
       return false;
@@ -83,7 +83,7 @@ export class DealService extends BaseService<Deal> {
   }
 
   // Методы для работы со статусами сделок
-  async confirmDeal(id: number): Promise<Deal | null> {
+  async confirmDeal(id: string): Promise<Deal | null> {
     const deal = await this.findById(id);
     if (!deal) {
       throw new Error('Deal not found');
@@ -97,7 +97,7 @@ export class DealService extends BaseService<Deal> {
     return await this.findById(id);
   }
 
-  async moveToDraft(id: number): Promise<Deal | null> {
+  async moveToDraft(id: string): Promise<Deal | null> {
     const deal = await this.findById(id);
     if (!deal) {
       throw new Error('Deal not found');
@@ -111,7 +111,7 @@ export class DealService extends BaseService<Deal> {
     return await this.findById(id);
   }
 
-  async cancelDeal(id: number): Promise<Deal | null> {
+  async cancelDeal(id: string): Promise<Deal | null> {
     const deal = await this.findById(id);
     if (!deal) {
       throw new Error('Deal not found');
@@ -125,7 +125,7 @@ export class DealService extends BaseService<Deal> {
     return await this.findById(id);
   }
 
-  async completeDeal(id: number): Promise<Deal | null> {
+  async completeDeal(id: string): Promise<Deal | null> {
     const deal = await this.findById(id);
     if (!deal) {
       throw new Error('Deal not found');
@@ -146,21 +146,21 @@ export class DealService extends BaseService<Deal> {
   }
 
   // Методы для работы с этапами
-  async getSteps(dealId: number): Promise<Step[]> {
+  async getSteps(dealId: string): Promise<Step[]> {
     return await this.stepRepository.find({
       where: { deal: { dealId } },
       relations: ['deponents', 'recipients']
     });
   }
 
-  async getStepById(stepId: number): Promise<Step | null> {
+  async getStepById(stepId: string): Promise<Step | null> {
     return await this.stepRepository.findOne({
       where: { stepId },
       relations: ['deponents', 'recipients', 'deal']
     });
   }
 
-  async createStep(dealId: number, stepData: Partial<Step>): Promise<Step> {
+  async createStep(dealId: string, stepData: Partial<Step>): Promise<Step> {
     const deal = await this.findById(dealId);
     if (!deal) {
       throw new Error('Deal not found');
@@ -173,31 +173,31 @@ export class DealService extends BaseService<Deal> {
     return await this.stepRepository.save(step);
   }
 
-  async updateStep(stepId: number, stepData: Partial<Step>): Promise<Step | null> {
+  async updateStep(stepId: string, stepData: Partial<Step>): Promise<Step | null> {
     await this.stepRepository.update(stepId, stepData);
     return await this.getStepById(stepId);
   }
 
-  async deleteStep(stepId: number): Promise<boolean> {
+  async deleteStep(stepId: string): Promise<boolean> {
     const result = await this.stepRepository.delete(stepId);
     return result.affected ? result.affected > 0 : false;
   }
 
   // Методы для работы с депонентами
-  async getDeponents(stepId: number): Promise<Deponent[]> {
+  async getDeponents(stepId: string): Promise<Deponent[]> {
     return await this.deponentRepository.find({
       where: { step: { stepId } }
     });
   }
 
-  async getDeponentById(deponentId: number): Promise<Deponent | null> {
+  async getDeponentById(deponentId: string): Promise<Deponent | null> {
     return await this.deponentRepository.findOne({
       where: { deponentId },
       relations: ['step', 'beneficiary']
     });
   }
 
-  async createOrUpdateDeponent(stepId: number, deponentData: Partial<Deponent>): Promise<Deponent> {
+  async createOrUpdateDeponent(stepId: string, deponentData: Partial<Deponent>): Promise<Deponent> {
     const step = await this.getStepById(stepId);
     if (!step) {
       throw new Error('Step not found');
@@ -210,26 +210,26 @@ export class DealService extends BaseService<Deal> {
     return await this.deponentRepository.save(deponent);
   }
 
-  async deleteDeponent(deponentId: number): Promise<boolean> {
+  async deleteDeponent(deponentId: string): Promise<boolean> {
     const result = await this.deponentRepository.delete(deponentId);
     return result.affected ? result.affected > 0 : false;
   }
 
   // Методы для работы с реципиентами
-  async getRecipients(stepId: number): Promise<Recipient[]> {
+  async getRecipients(stepId: string): Promise<Recipient[]> {
     return await this.recipientRepository.find({
       where: { step: { stepId } }
     });
   }
 
-  async getRecipientById(recipientId: number): Promise<Recipient | null> {
+  async getRecipientById(recipientId: string): Promise<Recipient | null> {
     return await this.recipientRepository.findOne({
       where: { recipientId },
       relations: ['step', 'beneficiary']
     });
   }
 
-  async createRecipient(stepId: number, recipientData: Partial<Recipient>): Promise<Recipient> {
+  async createRecipient(stepId: string, recipientData: Partial<Recipient>): Promise<Recipient> {
     const step = await this.getStepById(stepId);
     if (!step) {
       throw new Error('Step not found');
@@ -242,24 +242,24 @@ export class DealService extends BaseService<Deal> {
     return await this.recipientRepository.save(recipient);
   }
 
-  async updateRecipient(recipientId: number, recipientData: Partial<Recipient>): Promise<Recipient | null> {
+  async updateRecipient(recipientId: string, recipientData: Partial<Recipient>): Promise<Recipient | null> {
     await this.recipientRepository.update(recipientId, recipientData);
     return await this.getRecipientById(recipientId);
   }
 
-  async deleteRecipient(recipientId: number): Promise<boolean> {
+  async deleteRecipient(recipientId: string): Promise<boolean> {
     const result = await this.recipientRepository.delete(recipientId);
     return result.affected ? result.affected > 0 : false;
   }
 
   // Методы для работы с платежами
-  async getPayments(dealId: number): Promise<Payment[]> {
+  async getPayments(dealId: string): Promise<Payment[]> {
     return await this.paymentRepository.find({
       where: { deal: { dealId } }
     });
   }
 
-  async getPaymentById(paymentId: number): Promise<Payment | null> {
+  async getPaymentById(paymentId: string): Promise<Payment | null> {
     return await this.paymentRepository.findOne({
       where: { paymentId },
       relations: ['deal']
@@ -274,7 +274,7 @@ export class DealService extends BaseService<Deal> {
     });
   }
 
-  async findByBeneficiary(beneficiaryId: number): Promise<Deal[]> {
+  async findByBeneficiary(beneficiaryId: string): Promise<Deal[]> {
     return await this.repository.find({
       where: { beneficiary: { beneficiaryId } },
       relations: ['beneficiary', 'steps']

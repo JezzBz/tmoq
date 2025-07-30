@@ -16,35 +16,80 @@ export class PaymentService extends BaseService<Payment> {
     this.dealRepository = dealRepository;
   }
 
-  async findById(id: number): Promise<Payment | null> {
+  async findById(id: string): Promise<Payment | null> {
     return await this.repository.findOne({
       where: { paymentId: id },
-      relations: ['deal']
+      relations: ['deal', 'beneficiary', 'bankDetails']
     });
   }
 
-  async createPayment(data: Partial<Payment>): Promise<Payment> {
+  async findByIdNumber(id: number): Promise<Payment | null> {
+    return await this.repository.findOne({
+      where: { paymentId: id.toString() },
+      relations: ['deal', 'beneficiary', 'bankDetails']
+    });
+  }
+
+  async findPayments(options: {
+    beneficiaryId?: string;
+    dealId?: string;
+    accountNumber?: string;
+    offset: number;
+    limit: number;
+  }): Promise<[Payment[], number]> {
+    const queryBuilder = this.repository.createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.deal', 'deal')
+      .leftJoinAndSelect('payment.beneficiary', 'beneficiary')
+      .leftJoinAndSelect('payment.bankDetails', 'bankDetails');
+
+    if (options.beneficiaryId) {
+      queryBuilder.andWhere('payment.beneficiaryId = :beneficiaryId', { beneficiaryId: options.beneficiaryId });
+    }
+
+    if (options.dealId) {
+      queryBuilder.andWhere('payment.dealId = :dealId', { dealId: options.dealId });
+    }
+
+    if (options.accountNumber) {
+      queryBuilder.andWhere('payment.accountNumber = :accountNumber', { accountNumber: options.accountNumber });
+    }
+
+    return await queryBuilder
+      .skip(options.offset)
+      .take(options.limit)
+      .orderBy('payment.createdAt', 'DESC')
+      .getManyAndCount();
+  }
+
+  async createPayment(data: any, idempotencyKey: string): Promise<Payment> {
+    // Проверяем идемпотентность
+    const existingPayment = await this.repository.findOne({
+      where: { 
+        beneficiaryId: data.beneficiaryId,
+        accountNumber: data.accountNumber,
+        amount: data.amount,
+        purpose: data.purpose
+      }
+    });
+
+    if (existingPayment) {
+      return existingPayment;
+    }
+
     // Валидация данных
     this.validatePaymentData(data);
-    
-    // Проверяем существование сделки
-    if (data.dealId) {
-      const deal = await this.dealRepository.findOne({
-        where: { dealId: data.dealId }
-      });
-      if (!deal) {
-        throw new Error('Deal not found');
-      }
-    }
 
     const payment = this.repository.create({
       ...data,
-      status: PaymentStatus.PENDING
+      status: PaymentStatus.PENDING,
+      operationId: this.generateUUID()
     });
-    return await this.repository.save(payment);
+
+    const savedPayment = await this.repository.save(payment);
+    return Array.isArray(savedPayment) ? savedPayment[0] : savedPayment;
   }
 
-  async updatePayment(id: number, data: Partial<Payment>): Promise<Payment | null> {
+  async updatePayment(id: string, data: Partial<Payment>): Promise<Payment | null> {
     // Валидация данных
     this.validatePaymentData(data);
     
@@ -52,7 +97,7 @@ export class PaymentService extends BaseService<Payment> {
     return await this.findById(id);
   }
 
-  async deletePayment(id: number): Promise<boolean> {
+  async deletePayment(id: string): Promise<boolean> {
     const payment = await this.findById(id);
     if (!payment) {
       return false;
@@ -68,7 +113,7 @@ export class PaymentService extends BaseService<Payment> {
   }
 
   // Методы для работы со статусами платежей
-  async processPayment(id: number): Promise<Payment | null> {
+  async processPayment(id: string): Promise<Payment | null> {
     const payment = await this.findById(id);
     if (!payment) {
       throw new Error('Payment not found');
@@ -95,8 +140,8 @@ export class PaymentService extends BaseService<Payment> {
     }
   }
 
-  async retryPayment(id: number): Promise<Payment | null> {
-    const payment = await this.findById(id);
+  async retryPayment(paymentId: string): Promise<string> {
+    const payment = await this.findById(paymentId);
     if (!payment) {
       throw new Error('Payment not found');
     }
@@ -105,14 +150,21 @@ export class PaymentService extends BaseService<Payment> {
       throw new Error('Only failed payments can be retried');
     }
 
-    await this.repository.update({ paymentId: id }, { 
+    const retryPaymentId = this.generateUUID();
+    
+    // Создаем новый платеж на основе неуспешного
+    const retryPayment = this.repository.create({
+      ...payment,
+      paymentId: retryPaymentId,
       status: PaymentStatus.PENDING,
-      processedAt: undefined
+      createdAt: new Date()
     });
-    return await this.findById(id);
+
+    await this.repository.save(retryPayment);
+    return retryPaymentId;
   }
 
-  async cancelPayment(id: number): Promise<Payment | null> {
+  async cancelPayment(id: string): Promise<Payment | null> {
     const payment = await this.findById(id);
     if (!payment) {
       throw new Error('Payment not found');
@@ -130,14 +182,14 @@ export class PaymentService extends BaseService<Payment> {
   }
 
   // Методы для работы с платежами в рамках сделки
-  async getPaymentsByDeal(dealId: number): Promise<Payment[]> {
+  async getPaymentsByDeal(dealId: string): Promise<Payment[]> {
     return await this.repository.find({
       where: { deal: { dealId } },
       relations: ['deal']
     });
   }
 
-  async getPaymentsByDealAndStatus(dealId: number, status: PaymentStatus): Promise<Payment[]> {
+  async getPaymentsByDealAndStatus(dealId: string, status: PaymentStatus): Promise<Payment[]> {
     return await this.repository.find({
       where: { 
         deal: { dealId },
@@ -169,8 +221,8 @@ export class PaymentService extends BaseService<Payment> {
 
   // Методы для выполнения платежей в пользу бенефициара
   async executePaymentToBeneficiary(
-    dealId: number,
-    beneficiaryId: number,
+    dealId: string,
+    beneficiaryId: string,
     amount: number,
     currency: string,
     description?: string
@@ -235,7 +287,7 @@ export class PaymentService extends BaseService<Payment> {
   }
 
   // Статистика
-  async getPaymentStatistics(dealId?: number): Promise<{
+  async getPaymentStatistics(dealId?: string): Promise<{
     total: number;
     pending: number;
     completed: number;
@@ -265,6 +317,48 @@ export class PaymentService extends BaseService<Payment> {
     return statistics;
   }
 
+  async findIncomingTransactions(options: {
+    accountNumber: string;
+    offset: number;
+    limit: number;
+  }): Promise<[any[], number]> {
+    // В реальном приложении здесь была бы логика получения входящих транзакций
+    // Пока возвращаем заглушку
+    const mockTransactions = [{
+      accountNumber: options.accountNumber,
+      operationId: this.generateUUID(),
+      amount: 7500,
+      currency: "643",
+      operationAmount: 100,
+      operationCurrency: "840",
+      payerBik: "044525974",
+      payerKpp: "773401001",
+      payerInn: "906858195320",
+      payerBankName: "АО \"ТБанк\"",
+      payerBankSwiftCode: "TICSRUMMXXX",
+      payerAccountNumber: "40802810300002711854",
+      payerCorrAccountNumber: "30101810145250000974",
+      payerName: "Киняев Фома Семенович",
+      paymentPurpose: "Назначение платежа",
+      documentNumber: "287846",
+      chargeDate: "2022-01-20T14:10:56Z",
+      authorizationDate: "2022-01-20T14:10:56Z",
+      transactionDate: "2022-01-20T14:10:56Z",
+      drawDate: "2022-01-20T14:10:56Z"
+    }];
+
+    return [mockTransactions, 1];
+  }
+
+  async identifyIncomingTransaction(operationId: string, amountDistribution: any[]): Promise<any> {
+    // В реальном приложении здесь была бы логика идентификации входящей транзакции
+    return {
+      operationId,
+      identified: true,
+      distributions: amountDistribution
+    };
+  }
+
   // Валидация данных
   private validatePaymentData(data: Partial<Payment>): void {
     if (data.amount && data.amount <= 0) {
@@ -275,8 +369,16 @@ export class PaymentService extends BaseService<Payment> {
       throw new Error('Currency code must be 3 characters long');
     }
 
-    if (data.dealId && data.dealId <= 0) {
+    if (data.dealId && data.dealId.length === 0) {
       throw new Error('Invalid deal ID');
     }
+  }
+
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 } 

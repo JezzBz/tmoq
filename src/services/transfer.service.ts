@@ -19,49 +19,92 @@ export class TransferService extends BaseService<Transfer> {
     this.balanceService = balanceService;
   }
 
-  async findById(id: number): Promise<Transfer | null> {
+  async findById(id: string): Promise<Transfer | null> {
     return await this.repository.findOne({
       where: { transferId: id },
       relations: ['fromBeneficiary', 'toBeneficiary']
     });
   }
 
-  async createTransfer(data: Partial<Transfer>): Promise<Transfer> {
+  async findTransfers(options: {
+    accountNumber: string;
+    dealId?: string;
+    fromBeneficiaryId: string;
+    toBeneficiaryId?: string;
+    offset: number;
+    limit: number;
+  }): Promise<[any[], number]> {
+    // В реальном приложении здесь была бы логика получения переводов
+    // Пока возвращаем заглушку
+    const mockTransfers = [
+      {
+        type: "DIRECT",
+        transferId: this.generateUUID(),
+        accountNumber: options.accountNumber,
+        from: { beneficiaryId: options.fromBeneficiaryId },
+        to: { beneficiaryId: options.toBeneficiaryId || "49e46893-9a7e-409b-8c79-647aecaae555" },
+        purpose: "Назначение платежа",
+        amount: 322
+      },
+      {
+        type: "TO_DEAL",
+        transferId: this.generateUUID(),
+        accountNumber: options.accountNumber,
+        from: { beneficiaryId: options.fromBeneficiaryId },
+        to: { 
+          dealId: options.dealId || "dd6c3237-9958-47d9-9ba0-f6faeaa0e788",
+          stepId: "c87d3297-f4ae-4f88-add9-6722c1fc0b8c"
+        },
+        amount: 322
+      },
+      {
+        type: "FROM_DEAL",
+        transferId: this.generateUUID(),
+        accountNumber: options.accountNumber,
+        from: { 
+          dealId: options.dealId || "dd6c3237-9958-47d9-9ba0-f6faeaa0e788",
+          stepId: "c87d3297-f4ae-4f88-add9-6722c1fc0b8c"
+        },
+        to: { beneficiaryId: options.toBeneficiaryId || "49e46893-9a7e-409b-8c79-647aecaae555" },
+        purpose: "Назначение платежа",
+        amount: 322
+      }
+    ];
+
+    return [mockTransfers, 3];
+  }
+
+  async createTransfer(data: any, idempotencyKey: string): Promise<any> {
+    // Проверяем идемпотентность
+    const existingTransfer = await this.repository.findOne({
+      where: { 
+        accountNumber: data.accountNumber,
+        fromBeneficiaryId: data.from.beneficiaryId,
+        toBeneficiaryId: data.to.beneficiaryId,
+        amount: data.amount,
+      
+      }
+    });
+
+    if (existingTransfer) {
+      return existingTransfer;
+    }
+
     // Валидация данных
     this.validateTransferData(data);
-    
-    // Проверяем существование бенефициаров
-    if (data.fromBeneficiaryId) {
-      const fromBeneficiary = await this.beneficiaryRepository.findOne({
-        where: { beneficiaryId: data.fromBeneficiaryId }
-      });
-      if (!fromBeneficiary) {
-        throw new Error('From beneficiary not found');
-      }
-    }
-
-    if (data.toBeneficiaryId) {
-      const toBeneficiary = await this.beneficiaryRepository.findOne({
-        where: { beneficiaryId: data.toBeneficiaryId }
-      });
-      if (!toBeneficiary) {
-        throw new Error('To beneficiary not found');
-      }
-    }
-
-    // Проверяем, что отправитель и получатель разные
-    if (data.fromBeneficiaryId === data.toBeneficiaryId) {
-      throw new Error('From and to beneficiaries cannot be the same');
-    }
 
     const transfer = this.repository.create({
       ...data,
+      fromBeneficiaryId: data.from.beneficiaryId,
+      toBeneficiaryId: data.to.beneficiaryId,
       status: PaymentStatus.PENDING
     });
-    return await this.repository.save(transfer);
+
+    const savedTransfer = await this.repository.save(transfer);
+    return Array.isArray(savedTransfer) ? savedTransfer[0] : savedTransfer;
   }
 
-  async updateTransfer(id: number, data: Partial<Transfer>): Promise<Transfer | null> {
+  async updateTransfer(id: string, data: Partial<Transfer>): Promise<Transfer | null> {
     // Валидация данных
     this.validateTransferData(data);
     
@@ -69,7 +112,7 @@ export class TransferService extends BaseService<Transfer> {
     return await this.findById(id);
   }
 
-  async deleteTransfer(id: number): Promise<boolean> {
+  async deleteTransfer(id: string): Promise<boolean> {
     const transfer = await this.findById(id);
     if (!transfer) {
       return false;
@@ -85,7 +128,7 @@ export class TransferService extends BaseService<Transfer> {
   }
 
   // Методы для выполнения переводов
-  async executeTransfer(id: number): Promise<Transfer | null> {
+  async executeTransfer(id: string): Promise<Transfer | null> {
     const transfer = await this.findById(id);
     if (!transfer) {
       throw new Error('Transfer not found');
@@ -142,7 +185,7 @@ export class TransferService extends BaseService<Transfer> {
     }
   }
 
-  async retryTransfer(id: number): Promise<Transfer | null> {
+  async retryTransfer(id: string): Promise<Transfer | null> {
     const transfer = await this.findById(id);
     if (!transfer) {
       throw new Error('Transfer not found');
@@ -161,7 +204,7 @@ export class TransferService extends BaseService<Transfer> {
     return await this.findById(id);
   }
 
-  async cancelTransfer(id: number): Promise<Transfer | null> {
+  async cancelTransfer(id: string): Promise<Transfer | null> {
     const transfer = await this.findById(id);
     if (!transfer) {
       throw new Error('Transfer not found');
@@ -180,7 +223,7 @@ export class TransferService extends BaseService<Transfer> {
   }
 
   // Методы для получения переводов по бенефициару
-  async getTransfersByBeneficiary(beneficiaryId: number): Promise<Transfer[]> {
+  async getTransfersByBeneficiary(beneficiaryId: string): Promise<Transfer[]> {
     return await this.repository.find({
       where: [
         { fromBeneficiaryId: beneficiaryId },
@@ -189,13 +232,13 @@ export class TransferService extends BaseService<Transfer> {
     });
   }
 
-  async getOutgoingTransfers(beneficiaryId: number): Promise<Transfer[]> {
+  async getOutgoingTransfers(beneficiaryId: string): Promise<Transfer[]> {
     return await this.repository.find({
       where: { fromBeneficiaryId: beneficiaryId }
     });
   }
 
-  async getIncomingTransfers(beneficiaryId: number): Promise<Transfer[]> {
+  async getIncomingTransfers(beneficiaryId: string): Promise<Transfer[]> {
     return await this.repository.find({
       where: { toBeneficiaryId: beneficiaryId }
     });
@@ -234,7 +277,7 @@ export class TransferService extends BaseService<Transfer> {
   }
 
   // Методы для получения информации о переводе
-  async getTransferInfo(transferId: number): Promise<{
+  async getTransferInfo(transferId: string): Promise<{
     transfer: Transfer | null;
     fromBalance: any;
     toBalance: any;
@@ -263,7 +306,7 @@ export class TransferService extends BaseService<Transfer> {
   }
 
   // Статистика по переводам
-  async getTransferStatistics(beneficiaryId?: number): Promise<{
+  async getTransferStatistics(beneficiaryId?: string): Promise<{
     total: number;
     pending: number;
     completed: number;
@@ -300,8 +343,8 @@ export class TransferService extends BaseService<Transfer> {
 
   // Методы для проверки возможности перевода
   async checkTransferPossibility(
-    fromBeneficiaryId: number,
-    toBeneficiaryId: number,
+    fromBeneficiaryId: string,
+    toBeneficiaryId: string,
     amount: number,
     currency: string
   ): Promise<{
@@ -366,16 +409,24 @@ export class TransferService extends BaseService<Transfer> {
       throw new Error('Currency code must be 3 characters long');
     }
 
-    if (data.fromBeneficiaryId && data.fromBeneficiaryId <= 0) {
+    if (data.fromBeneficiaryId && data.fromBeneficiaryId.length === 0) {
       throw new Error('Invalid from beneficiary ID');
     }
 
-    if (data.toBeneficiaryId && data.toBeneficiaryId <= 0) {
+    if (data.toBeneficiaryId && data.toBeneficiaryId.length === 0) {
       throw new Error('Invalid to beneficiary ID');
     }
 
     if (data.fromBeneficiaryId === data.toBeneficiaryId) {
       throw new Error('From and to beneficiaries cannot be the same');
     }
+  }
+
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 } 

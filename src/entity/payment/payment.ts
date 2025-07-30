@@ -2,21 +2,22 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDa
 import { PaymentType, PaymentStatus } from "../../enums/payment";
 import { Beneficiary } from "../beneficiary/beneficiary";
 import { Deal } from "../deal/deal";
+import { BankDetails } from "../bankDetails/bankDetails";
 
 @Entity()
 export class Payment {
-    @PrimaryGeneratedColumn()
-    paymentId!: number;
+    @PrimaryGeneratedColumn("uuid")
+    paymentId!: string;
 
     @Column({
-        type: "enum",
-        enum: PaymentType
+        type: "varchar",
+        length: 50
     })
     type!: PaymentType;
 
     @Column({
-        type: "enum",
-        enum: PaymentStatus,
+        type: "varchar",
+        length: 50,
         default: PaymentStatus.PENDING
     })
     status!: PaymentStatus;
@@ -30,19 +31,50 @@ export class Payment {
     @Column({ nullable: true })
     description?: string;
 
+    @Column({ nullable: true })
+    purpose?: string;
+
+    @Column({ nullable: true })
+    accountNumber?: string;
+
+    @Column({ nullable: true })
+    operationId?: string;
+
+    @Column({ nullable: true })
+    errorMessage?: string;
+
+    @Column({ nullable: true })
+    uin?: string;
+
+    @Column({ type: "json", nullable: true })
+    tax?: any;
+
+    @Column({ nullable: true })
+    stepId?: string;
+
+    @Column({ nullable: true })
+    recipientId?: string;
+
     @ManyToOne(() => Beneficiary)
     @JoinColumn({ name: "beneficiaryId" })
     beneficiary!: Beneficiary;
 
     @Column()
-    beneficiaryId!: number;
+    beneficiaryId!: string;
 
     @ManyToOne(() => Deal, { nullable: true })
     @JoinColumn({ name: "dealId" })
     deal?: Deal;
 
     @Column({ nullable: true })
-    dealId?: number;
+    dealId?: string;
+
+    @ManyToOne(() => BankDetails, { nullable: true })
+    @JoinColumn({ name: "bankDetailsId" })
+    bankDetails?: BankDetails;
+
+    @Column({ nullable: true })
+    bankDetailsId?: string;
 
     @CreateDateColumn()
     createdAt!: Date;

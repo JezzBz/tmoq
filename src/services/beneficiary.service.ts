@@ -23,11 +23,15 @@ export class BeneficiaryService extends BaseService<Beneficiary> {
     this.bankDetailsRepository = bankDetailsRepository;
   }
 
-  async findById(id: number): Promise<Beneficiary | null> {
+  async findById(id: string): Promise<Beneficiary | null> {
     return await this.repository.findOne({
       where: { beneficiaryId: id },
       relations: ['addresses', 'documents']
     });
+  }
+
+  async findAndCount(options: any): Promise<[Beneficiary[], number]> {
+    return await this.repository.findAndCount(options);
   }
 
   async createBeneficiary(data: Partial<Beneficiary>): Promise<Beneficiary> {
@@ -38,7 +42,7 @@ export class BeneficiaryService extends BaseService<Beneficiary> {
     return await this.repository.save(beneficiary);
   }
 
-  async updateBeneficiary(id: number, data: Partial<Beneficiary>): Promise<Beneficiary | null> {
+  async updateBeneficiary(id: string, data: Partial<Beneficiary>): Promise<Beneficiary | null> {
     // Валидация данных
     this.validateBeneficiaryData(data);
     
@@ -46,19 +50,19 @@ export class BeneficiaryService extends BaseService<Beneficiary> {
     return await this.findById(id);
   }
 
-  async deleteBeneficiary(id: number): Promise<boolean> {
+  async deleteBeneficiary(id: string): Promise<boolean> {
     const result = await this.repository.delete({ beneficiaryId: id });
     return result.affected ? result.affected > 0 : false;
   }
 
   // Методы для работы с адресами
-  async getAddresses(beneficiaryId: number): Promise<Address[]> {
+  async getAddresses(beneficiaryId: string): Promise<Address[]> {
     return await this.addressRepository.find({
       where: { beneficiary: { beneficiaryId } }
     });
   }
 
-  async addAddress(beneficiaryId: number, addressData: Partial<Address>): Promise<Address> {
+  async addAddress(beneficiaryId: string, addressData: Partial<Address>): Promise<Address> {
     const beneficiary = await this.findById(beneficiaryId);
     if (!beneficiary) {
       throw new Error('Beneficiary not found');
@@ -82,13 +86,13 @@ export class BeneficiaryService extends BaseService<Beneficiary> {
   }
 
   // Методы для работы с документами
-  async getDocuments(beneficiaryId: number): Promise<Document[]> {
+  async getDocuments(beneficiaryId: string): Promise<Document[]> {
     return await this.documentRepository.find({
       where: { beneficiary: { beneficiaryId } }
     });
   }
 
-  async addDocument(beneficiaryId: number, documentData: Partial<Document>): Promise<Document> {
+  async addDocument(beneficiaryId: string, documentData: Partial<Document>): Promise<Document> {
     const beneficiary = await this.findById(beneficiaryId);
     if (!beneficiary) {
       throw new Error('Beneficiary not found');
@@ -112,13 +116,13 @@ export class BeneficiaryService extends BaseService<Beneficiary> {
   }
 
   // Методы для работы с банковскими реквизитами
-  async getBankDetails(beneficiaryId: number): Promise<BankDetails[]> {
+  async getBankDetails(beneficiaryId: string): Promise<BankDetails[]> {
     return await this.bankDetailsRepository.find({
       where: { beneficiary: { beneficiaryId } }
     });
   }
 
-  async addBankDetails(beneficiaryId: number, bankDetailsData: Partial<BankDetails>): Promise<BankDetails> {
+  async addBankDetails(beneficiaryId: string, bankDetailsData: Partial<BankDetails>): Promise<BankDetails> {
     const beneficiary = await this.findById(beneficiaryId);
     if (!beneficiary) {
       throw new Error('Beneficiary not found');
@@ -131,17 +135,17 @@ export class BeneficiaryService extends BaseService<Beneficiary> {
     return await this.bankDetailsRepository.save(bankDetails);
   }
 
-  async updateBankDetails(bankDetailsId: number, bankDetailsData: Partial<BankDetails>): Promise<BankDetails | null> {
+  async updateBankDetails(bankDetailsId: string, bankDetailsData: Partial<BankDetails>): Promise<BankDetails | null> {
     await this.bankDetailsRepository.update(bankDetailsId, bankDetailsData);
     return await this.bankDetailsRepository.findOne({ where: { bankDetailsId } });
   }
 
-  async deleteBankDetails(bankDetailsId: number): Promise<boolean> {
+  async deleteBankDetails(bankDetailsId: string): Promise<boolean> {
     const result = await this.bankDetailsRepository.delete(bankDetailsId);
     return result.affected ? result.affected > 0 : false;
   }
 
-  async setDefaultBankDetails(beneficiaryId: number, bankDetailsId: number): Promise<boolean> {
+  async setDefaultBankDetails(beneficiaryId: string, bankDetailsId: string): Promise<boolean> {
     // Сначала сбрасываем все реквизиты как не по умолчанию
     await this.bankDetailsRepository.update(
       { beneficiary: { beneficiaryId } },

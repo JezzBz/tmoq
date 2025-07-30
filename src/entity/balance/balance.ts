@@ -3,8 +3,8 @@ import { Beneficiary } from "../beneficiary/beneficiary";
 
 @Entity()
 export class Balance {
-    @PrimaryGeneratedColumn()
-    balanceId!: number;
+    @PrimaryGeneratedColumn("uuid")
+    balanceId!: string;
 
     @Column()
     accountId!: string;
@@ -29,7 +29,7 @@ export class Balance {
     beneficiary!: Beneficiary;
 
     @Column()
-    beneficiaryId!: number;
+    beneficiaryId!: string;
 
     @CreateDateColumn()
     createdAt!: Date;

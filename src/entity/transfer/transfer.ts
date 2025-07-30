@@ -4,8 +4,8 @@ import { PaymentStatus } from "../../enums/payment";
 
 @Entity()
 export class Transfer {
-    @PrimaryGeneratedColumn()
-    transferId!: number;
+    @PrimaryGeneratedColumn("uuid")
+    transferId!: string;
 
     @Column()
     fromAccountId!: string;
@@ -14,8 +14,8 @@ export class Transfer {
     toAccountId!: string;
 
     @Column({
-        type: "enum",
-        enum: TransferType
+        type: "varchar",
+        length: 50
     })
     type!: TransferType;
 
@@ -26,8 +26,8 @@ export class Transfer {
     currency!: string;
 
     @Column({
-        type: "enum",
-        enum: PaymentStatus,
+        type: "varchar",
+        length: 50,
         default: PaymentStatus.PENDING
     })
     status!: PaymentStatus;
@@ -45,10 +45,13 @@ export class Transfer {
     executedAt?: Date;
 
     @Column({ nullable: true })
-    fromBeneficiaryId?: number;
+    fromBeneficiaryId?: string;
 
     @Column({ nullable: true })
-    toBeneficiaryId?: number;
+    toBeneficiaryId?: string;
+
+    @Column({ nullable: true })
+    accountNumber?: string;
 
     @Column({ type: "datetime", nullable: true })
     failedAt?: Date;

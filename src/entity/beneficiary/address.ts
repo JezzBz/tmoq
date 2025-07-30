@@ -7,11 +7,8 @@ export class Address {
     @PrimaryGeneratedColumn()
     addressId!: number;
 
-    @Column({
-        type: "enum",
-        enum: AddressType
-    })
-    type!: AddressType;
+    @Column()
+    type!: string;
 
     @Column()
     address!: string;

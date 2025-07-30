@@ -5,8 +5,8 @@ import { BankDetails } from "../bankDetails/bankDetails";
 
 @Entity()
 export class Recipient {
-    @PrimaryGeneratedColumn()
-    recipientId!: number;
+    @PrimaryGeneratedColumn("uuid")
+    recipientId!: string;
 
     @Column({ type: "decimal", precision: 15, scale: 2 })
     amount!: number;
@@ -16,21 +16,21 @@ export class Recipient {
     step!: Step;
 
     @Column()
-    stepId!: number;
+    stepId!: string;
 
     @ManyToOne(() => Beneficiary)
     @JoinColumn({ name: "beneficiaryId" })
     beneficiary!: Beneficiary;
 
     @Column()
-    beneficiaryId!: number;
+    beneficiaryId!: string;
 
     @ManyToOne(() => BankDetails)
     @JoinColumn({ name: "bankDetailsId" })
     bankDetails!: BankDetails;
 
     @Column()
-    bankDetailsId!: number;
+    bankDetailsId!: string;
 
     @CreateDateColumn()
     createdAt!: Date;

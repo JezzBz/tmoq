@@ -3,30 +3,24 @@ import { services } from '../config/services';
 
 const router: Router = Router();
 
-// GET /api/v1/beneficiaries - Получить список бенефициаров
+// 1.1 GET /api/v1/beneficiaries - Получить список бенефициаров
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { page = 1, limit = 10, status, type } = req.query;
+    const { limit = 50, offset = 0 } = req.query;
     const options = {
-      skip: (Number(page) - 1) * Number(limit),
+      skip: Number(offset),
       take: Number(limit),
-      where: {} as any
+      relations: ['addresses', 'documents']
     };
 
-    if (status) options.where.status = status;
-    if (type) options.where.type = type;
-
-    const beneficiaries = await services.beneficiaryService.findAll(options);
+    const [beneficiaries, total] = await services.beneficiaryService.findAndCount(options);
     
     res.json({
-      message: 'Beneficiaries retrieved successfully',
-      data: beneficiaries,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        total: beneficiaries.length
-      },
-      timestamp: new Date().toISOString()
+      offset: Number(offset),
+      limit: Number(limit),
+      size: beneficiaries.length,
+      total,
+      results: beneficiaries
     });
   } catch (error) {
     console.error('Error getting beneficiaries:', error);
@@ -37,54 +31,14 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/beneficiaries/:id - Получить бенефициара по ID
-router.get('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const beneficiaryId = parseInt(id);
-    
-    if (isNaN(beneficiaryId)) {
-      return res.status(400).json({
-        error: 'Invalid beneficiary ID',
-        message: 'Beneficiary ID must be a number'
-      });
-    }
-
-    const beneficiary = await services.beneficiaryService.findById(beneficiaryId);
-    
-    if (!beneficiary) {
-      return res.status(404).json({
-        error: 'Beneficiary not found',
-        message: `Beneficiary with ID ${id} not found`
-      });
-    }
-
-    return res.json({
-      message: 'Beneficiary retrieved successfully',
-      data: beneficiary,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error getting beneficiary:', error);
-    return res.status(500).json({
-      error: 'Failed to get beneficiary',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// POST /api/v1/beneficiaries - Создать нового бенефициара
+// 1.2 POST /api/v1/beneficiaries - Создать нового бенефициара
 router.post('/', async (req: Request, res: Response) => {
   try {
     const beneficiaryData = req.body;
     
     const beneficiary = await services.beneficiaryService.createBeneficiary(beneficiaryData);
     
-    res.status(201).json({
-      message: 'Beneficiary created successfully',
-      data: beneficiary,
-      timestamp: new Date().toISOString()
-    });
+    res.status(201).json(beneficiary);
   } catch (error) {
     console.error('Error creating beneficiary:', error);
     res.status(400).json({
@@ -94,191 +48,231 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/v1/beneficiaries/:id - Обновить бенефициара
-router.put('/:id', async (req: Request, res: Response) => {
+// 1.3 GET /api/v1/beneficiaries/{beneficiaryId}/bank-details - Получить банковские реквизиты бенефициара
+router.get('/:beneficiaryId/bank-details', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const beneficiaryId = parseInt(id);
+    const { beneficiaryId } = req.params;
+    const { limit = 50, offset = 0 } = req.query;
+    
+    const [bankDetails, total] = await services.bankDetailsService.findByBeneficiaryId(
+      beneficiaryId, 
+      Number(limit), 
+      Number(offset)
+    );
+    
+    res.json({
+      offset: Number(offset),
+      limit: Number(limit),
+      size: bankDetails.length,
+      total,
+      results: bankDetails
+    });
+  } catch (error) {
+    console.error('Error getting bank details:', error);
+    res.status(500).json({
+      error: 'Failed to get bank details',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 1.4 POST /api/v1/beneficiaries/{beneficiaryId}/bank-details - Создать банковские реквизиты
+router.post('/:beneficiaryId/bank-details', async (req: Request, res: Response) => {
+  try {
+    const { beneficiaryId } = req.params;
+    const idempotencyKey = req.headers['idempotency-key'] as string;
+    const bankDetailsData = req.body;
+    
+    if (!idempotencyKey) {
+      return res.status(400).json({
+        error: 'Idempotency-Key header is required'
+      });
+    }
+    
+    const bankDetails = await services.bankDetailsService.createBankDetails(
+      beneficiaryId, 
+      bankDetailsData, 
+      idempotencyKey
+    );
+    
+    return res.status(201).json(bankDetails);
+  } catch (error) {
+    console.error('Error creating bank details:', error);
+    return res.status(400).json({
+      error: 'Failed to create bank details',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 1.5 POST /api/v1/beneficiaries/{beneficiaryId}/bank-details/{bankDetailsId}/set-default - Установить как дефолтные
+router.post('/:beneficiaryId/bank-details/:bankDetailsId/set-default', async (req: Request, res: Response) => {
+  try {
+    const { beneficiaryId, bankDetailsId } = req.params;
+    
+    const success = await services.bankDetailsService.setDefault(beneficiaryId, bankDetailsId);
+    
+    if (!success) {
+      return res.status(404).json({
+        error: 'Bank details not found'
+      });
+    }
+    
+    return res.status(200).send();
+  } catch (error) {
+    console.error('Error setting default bank details:', error);
+    return res.status(500).json({
+      error: 'Failed to set default bank details',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 1.6 POST /api/v1/beneficiaries/{beneficiaryId}/add-card-requests - Создать запрос на добавление карты
+router.post('/:beneficiaryId/add-card-requests', async (req: Request, res: Response) => {
+  try {
+    const { beneficiaryId } = req.params;
+    const idempotencyKey = req.headers['idempotency-key'] as string;
+    const { terminalKey } = req.body;
+    
+    if (!idempotencyKey) {
+      return res.status(400).json({
+        error: 'Idempotency-Key header is required'
+      });
+    }
+    
+    const addCardRequest = await services.bankDetailsService.createAddCardRequest(
+      beneficiaryId, 
+      terminalKey, 
+      idempotencyKey
+    );
+    
+    return res.status(201).json(addCardRequest);
+  } catch (error) {
+    console.error('Error creating add card request:', error);
+    return res.status(400).json({
+      error: 'Failed to create add card request',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 1.7 GET /api/v1/beneficiaries/{beneficiaryId}/bank-details/{bankDetailsId} - Получить банковские реквизиты по ID
+router.get('/:beneficiaryId/bank-details/:bankDetailsId', async (req: Request, res: Response) => {
+  try {
+    const { beneficiaryId, bankDetailsId } = req.params;
+    
+    const bankDetails = await services.bankDetailsService.findByIdWithBeneficiary(bankDetailsId, beneficiaryId);
+    
+    if (!bankDetails) {
+      return res.status(404).json({
+        error: 'Bank details not found'
+      });
+    }
+    
+    return res.json(bankDetails);
+  } catch (error) {
+    console.error('Error getting bank details:', error);
+    return res.status(500).json({
+      error: 'Failed to get bank details',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 1.8 PUT /api/v1/beneficiaries/{beneficiaryId}/bank-details/{bankDetailsId} - Обновить банковские реквизиты
+router.put('/:beneficiaryId/bank-details/:bankDetailsId', async (req: Request, res: Response) => {
+  try {
+    const { beneficiaryId, bankDetailsId } = req.params;
     const updateData = req.body;
     
-    if (isNaN(beneficiaryId)) {
-      return res.status(400).json({
-        error: 'Invalid beneficiary ID',
-        message: 'Beneficiary ID must be a number'
+    const bankDetails = await services.bankDetailsService.updateBankDetailsWithBeneficiary(
+      bankDetailsId, 
+      beneficiaryId, 
+      updateData
+    );
+    
+    if (!bankDetails) {
+      return res.status(404).json({
+        error: 'Bank details not found'
+      });
+    }
+    
+    return res.json(bankDetails);
+  } catch (error) {
+    console.error('Error updating bank details:', error);
+    return res.status(400).json({
+      error: 'Failed to update bank details',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 1.9 DELETE /api/v1/nominal-accounts/beneficiaries/{beneficiaryId}/bank-details/{bankDetailsId} - Удалить банковские реквизиты
+router.delete('/:beneficiaryId/bank-details/:bankDetailsId', async (req: Request, res: Response) => {
+  try {
+    const { beneficiaryId, bankDetailsId } = req.params;
+    
+    const success = await services.bankDetailsService.deleteBankDetailsWithBeneficiary(bankDetailsId, beneficiaryId);
+    
+    if (!success) {
+      return res.status(404).json({
+        error: 'Bank details not found'
+      });
+    }
+    
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting bank details:', error);
+    return res.status(500).json({
+      error: 'Failed to delete bank details',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 1.10 GET /api/v1/beneficiaries/{beneficiaryId} - Получить бенефициара по ID
+router.get('/:beneficiaryId', async (req: Request, res: Response) => {
+  try {
+    const { beneficiaryId } = req.params;
+    
+    const beneficiary = await services.beneficiaryService.findById(beneficiaryId);
+    
+    if (!beneficiary) {
+      return res.status(404).json({
+        error: 'Beneficiary not found'
       });
     }
 
+    return res.json(beneficiary);
+  } catch (error) {
+    console.error('Error getting beneficiary:', error);
+    return res.status(500).json({
+      error: 'Failed to get beneficiary',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 1.11 PUT /api/v1/beneficiaries/{beneficiaryId} - Обновить бенефициара
+router.put('/:beneficiaryId', async (req: Request, res: Response) => {
+  try {
+    const { beneficiaryId } = req.params;
+    const updateData = req.body;
+    
     const beneficiary = await services.beneficiaryService.updateBeneficiary(beneficiaryId, updateData);
     
     if (!beneficiary) {
       return res.status(404).json({
-        error: 'Beneficiary not found',
-        message: `Beneficiary with ID ${id} not found`
+        error: 'Beneficiary not found'
       });
     }
 
-    return res.json({
-      message: 'Beneficiary updated successfully',
-      data: beneficiary,
-      timestamp: new Date().toISOString()
-    });
+    return res.json(beneficiary);
   } catch (error) {
     console.error('Error updating beneficiary:', error);
     return res.status(400).json({
       error: 'Failed to update beneficiary',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// DELETE /api/v1/beneficiaries/:id - Удалить бенефициара
-router.delete('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const beneficiaryId = parseInt(id);
-    
-    if (isNaN(beneficiaryId)) {
-      return res.status(400).json({
-        error: 'Invalid beneficiary ID',
-        message: 'Beneficiary ID must be a number'
-      });
-    }
-
-    const deleted = await services.beneficiaryService.deleteBeneficiary(beneficiaryId);
-    
-    if (!deleted) {
-      return res.status(404).json({
-        error: 'Beneficiary not found',
-        message: `Beneficiary with ID ${id} not found`
-      });
-    }
-
-    return res.json({
-      message: 'Beneficiary deleted successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error deleting beneficiary:', error);
-    return res.status(500).json({
-      error: 'Failed to delete beneficiary',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// GET /api/v1/beneficiaries/:id/addresses - Получить адреса бенефициара
-router.get('/:id/addresses', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const beneficiaryId = parseInt(id);
-    
-    if (isNaN(beneficiaryId)) {
-      return res.status(400).json({
-        error: 'Invalid beneficiary ID',
-        message: 'Beneficiary ID must be a number'
-      });
-    }
-
-    const addresses = await services.beneficiaryService.getAddresses(beneficiaryId);
-    
-    return res.json({
-      message: 'Addresses retrieved successfully',
-      data: addresses,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error getting addresses:', error);
-    return res.status(500).json({
-      error: 'Failed to get addresses',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// POST /api/v1/beneficiaries/:id/addresses - Добавить адрес бенефициару
-router.post('/:id/addresses', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const beneficiaryId = parseInt(id);
-    const addressData = req.body;
-    
-    if (isNaN(beneficiaryId)) {
-      return res.status(400).json({
-        error: 'Invalid beneficiary ID',
-        message: 'Beneficiary ID must be a number'
-      });
-    }
-
-    const address = await services.beneficiaryService.addAddress(beneficiaryId, addressData);
-    
-    return res.status(201).json({
-      message: 'Address added successfully',
-      data: address,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error adding address:', error);
-    return res.status(400).json({
-      error: 'Failed to add address',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// GET /api/v1/beneficiaries/:id/documents - Получить документы бенефициара
-router.get('/:id/documents', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const beneficiaryId = parseInt(id);
-    
-    if (isNaN(beneficiaryId)) {
-      return res.status(400).json({
-        error: 'Invalid beneficiary ID',
-        message: 'Beneficiary ID must be a number'
-      });
-    }
-
-    const documents = await services.beneficiaryService.getDocuments(beneficiaryId);
-    
-    return res.json({
-      message: 'Documents retrieved successfully',
-      data: documents,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error getting documents:', error);
-    return res.status(500).json({
-      error: 'Failed to get documents',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// POST /api/v1/beneficiaries/:id/documents - Добавить документ бенефициару
-router.post('/:id/documents', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const beneficiaryId = parseInt(id);
-    const documentData = req.body;
-    
-    if (isNaN(beneficiaryId)) {
-      return res.status(400).json({
-        error: 'Invalid beneficiary ID',
-        message: 'Beneficiary ID must be a number'
-      });
-    }
-
-    const document = await services.beneficiaryService.addDocument(beneficiaryId, documentData);
-    
-    return res.status(201).json({
-      message: 'Document added successfully',
-      data: document,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Error adding document:', error);
-    return res.status(400).json({
-      error: 'Failed to add document',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

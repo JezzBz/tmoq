@@ -4,8 +4,8 @@ import { Beneficiary } from "../beneficiary/beneficiary";
 
 @Entity()
 export class Deponent {
-    @PrimaryGeneratedColumn()
-    deponentId!: number;
+    @PrimaryGeneratedColumn("uuid")
+    deponentId!: string;
 
     @Column({ type: "decimal", precision: 15, scale: 2 })
     amount!: number;
@@ -15,14 +15,14 @@ export class Deponent {
     step!: Step;
 
     @Column()
-    stepId!: number;
+    stepId!: string;
 
     @ManyToOne(() => Beneficiary)
     @JoinColumn({ name: "beneficiaryId" })
     beneficiary!: Beneficiary;
 
     @Column()
-    beneficiaryId!: number;
+    beneficiaryId!: string;
 
     @CreateDateColumn()
     createdAt!: Date;

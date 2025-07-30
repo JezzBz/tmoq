@@ -27,7 +27,7 @@ export class StepService extends BaseService<Step> {
     this.beneficiaryRepository = beneficiaryRepository;
   }
 
-  async findById(id: number): Promise<Step | null> {
+  async findById(id: string): Promise<Step | null> {
     return await this.repository.findOne({
       where: { stepId: id },
       relations: ['deal', 'deponents', 'recipients']
@@ -55,7 +55,7 @@ export class StepService extends BaseService<Step> {
     return await this.repository.save(step);
   }
 
-  async updateStep(id: number, data: Partial<Step>): Promise<Step | null> {
+  async updateStep(id: string, data: Partial<Step>): Promise<Step | null> {
     // Валидация данных
     this.validateStepData(data);
     
@@ -63,7 +63,7 @@ export class StepService extends BaseService<Step> {
     return await this.findById(id);
   }
 
-  async deleteStep(id: number): Promise<boolean> {
+  async deleteStep(id: string): Promise<boolean> {
     const step = await this.findById(id);
     if (!step) {
       return false;
@@ -79,7 +79,7 @@ export class StepService extends BaseService<Step> {
   }
 
   // Методы для работы со статусами этапов
-  async startStep(id: number): Promise<Step | null> {
+  async startStep(id: string): Promise<Step | null> {
     const step = await this.findById(id);
     if (!step) {
       throw new Error('Step not found');
@@ -96,7 +96,7 @@ export class StepService extends BaseService<Step> {
     return await this.findById(id);
   }
 
-  async completeStep(id: number): Promise<Step | null> {
+  async completeStep(id: string): Promise<Step | null> {
     const step = await this.findById(id);
     if (!step) {
       throw new Error('Step not found');
@@ -125,7 +125,7 @@ export class StepService extends BaseService<Step> {
     return await this.findById(id);
   }
 
-  async cancelStep(id: number): Promise<Step | null> {
+  async cancelStep(id: string): Promise<Step | null> {
     const step = await this.findById(id);
     if (!step) {
       throw new Error('Step not found');
@@ -143,21 +143,21 @@ export class StepService extends BaseService<Step> {
   }
 
   // Методы для работы с депонентами
-  async getDeponents(stepId: number): Promise<Deponent[]> {
+  async getDeponents(stepId: string): Promise<Deponent[]> {
     return await this.deponentRepository.find({
       where: { step: { stepId } },
       relations: ['beneficiary']
     });
   }
 
-  async getDeponentById(deponentId: number): Promise<Deponent | null> {
+  async getDeponentById(deponentId: string): Promise<Deponent | null> {
     return await this.deponentRepository.findOne({
       where: { deponentId },
       relations: ['step', 'beneficiary']
     });
   }
 
-  async createOrUpdateDeponent(stepId: number, deponentData: Partial<Deponent>): Promise<Deponent> {
+  async createOrUpdateDeponent(stepId: string, deponentData: Partial<Deponent>): Promise<Deponent> {
     const step = await this.findById(stepId);
     if (!step) {
       throw new Error('Step not found');
@@ -180,32 +180,32 @@ export class StepService extends BaseService<Step> {
     return await this.deponentRepository.save(deponent);
   }
 
-  async updateDeponent(deponentId: number, deponentData: Partial<Deponent>): Promise<Deponent | null> {
+  async updateDeponent(deponentId: string, deponentData: Partial<Deponent>): Promise<Deponent | null> {
     await this.deponentRepository.update(deponentId, deponentData);
     return await this.getDeponentById(deponentId);
   }
 
-  async deleteDeponent(deponentId: number): Promise<boolean> {
+  async deleteDeponent(deponentId: string): Promise<boolean> {
     const result = await this.deponentRepository.delete(deponentId);
     return result.affected ? result.affected > 0 : false;
   }
 
   // Методы для работы с реципиентами
-  async getRecipients(stepId: number): Promise<Recipient[]> {
+  async getRecipients(stepId: string): Promise<Recipient[]> {
     return await this.recipientRepository.find({
       where: { step: { stepId } },
       relations: ['beneficiary']
     });
   }
 
-  async getRecipientById(recipientId: number): Promise<Recipient | null> {
+  async getRecipientById(recipientId: string): Promise<Recipient | null> {
     return await this.recipientRepository.findOne({
       where: { recipientId },
       relations: ['step', 'beneficiary']
     });
   }
 
-  async createRecipient(stepId: number, recipientData: Partial<Recipient>): Promise<Recipient> {
+  async createRecipient(stepId: string, recipientData: Partial<Recipient>): Promise<Recipient> {
     const step = await this.findById(stepId);
     if (!step) {
       throw new Error('Step not found');
@@ -228,18 +228,18 @@ export class StepService extends BaseService<Step> {
     return await this.recipientRepository.save(recipient);
   }
 
-  async updateRecipient(recipientId: number, recipientData: Partial<Recipient>): Promise<Recipient | null> {
+  async updateRecipient(recipientId: string, recipientData: Partial<Recipient>): Promise<Recipient | null> {
     await this.recipientRepository.update(recipientId, recipientData);
     return await this.getRecipientById(recipientId);
   }
 
-  async deleteRecipient(recipientId: number): Promise<boolean> {
+  async deleteRecipient(recipientId: string): Promise<boolean> {
     const result = await this.recipientRepository.delete(recipientId);
     return result.affected ? result.affected > 0 : false;
   }
 
   // Методы для изменения реципиента на этапе сделки
-  async changeRecipient(stepId: number, oldRecipientId: number, newRecipientData: Partial<Recipient>): Promise<Recipient> {
+  async changeRecipient(stepId: string, oldRecipientId: string, newRecipientData: Partial<Recipient>): Promise<Recipient> {
     // Удаляем старого реципиента
     await this.deleteRecipient(oldRecipientId);
     
@@ -248,7 +248,7 @@ export class StepService extends BaseService<Step> {
   }
 
   // Методы для обновления банковских реквизитов реципиента
-  async updateRecipientBankDetails(recipientId: number, bankDetails: any): Promise<Recipient | null> {
+  async updateRecipientBankDetails(recipientId: string, bankDetails: any): Promise<Recipient | null> {
     const recipient = await this.getRecipientById(recipientId);
     if (!recipient) {
       throw new Error('Recipient not found');
@@ -259,7 +259,7 @@ export class StepService extends BaseService<Step> {
   }
 
   // Поиск и фильтрация
-  async findByDeal(dealId: number): Promise<Step[]> {
+  async findByDeal(dealId: string): Promise<Step[]> {
     return await this.repository.find({
       where: { deal: { dealId } },
       relations: ['deal', 'deponents', 'recipients']
@@ -273,7 +273,7 @@ export class StepService extends BaseService<Step> {
     });
   }
 
-  async findByDealAndStatus(dealId: number, status: StepStatus): Promise<Step[]> {
+  async findByDealAndStatus(dealId: string, status: StepStatus): Promise<Step[]> {
     return await this.repository.find({
       where: { 
         deal: { dealId },
@@ -284,7 +284,7 @@ export class StepService extends BaseService<Step> {
   }
 
   // Методы для проверки возможности проведения платежей
-  async checkPaymentPossibility(stepId: number): Promise<{
+  async checkPaymentPossibility(stepId: string): Promise<{
     canProcess: boolean;
     reasons: string[];
   }> {
@@ -325,7 +325,7 @@ export class StepService extends BaseService<Step> {
   }
 
   // Статистика по этапам
-  async getStepStatistics(dealId?: number): Promise<{
+  async getStepStatistics(dealId?: string): Promise<{
     total: number;
     pending: number;
     inProgress: number;
@@ -361,7 +361,7 @@ export class StepService extends BaseService<Step> {
       throw new Error('Step amount must be greater than zero');
     }
 
-    if (data.dealId && data.dealId <= 0) {
+    if (data.dealId && data.dealId.length === 0) {
       throw new Error('Invalid deal ID');
     }
   }

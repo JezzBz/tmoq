@@ -18,7 +18,7 @@ export class BalanceService extends BaseService<Balance> {
     this.beneficiaryRepository = beneficiaryRepository;
   }
 
-  async findById(id: number): Promise<Balance | null> {
+  async findById(id: string): Promise<Balance | null> {
     return await this.repository.findOne({
       where: { balanceId: id },
       relations: ['beneficiary']
@@ -46,7 +46,7 @@ export class BalanceService extends BaseService<Balance> {
     return await this.repository.save(balance);
   }
 
-  async updateBalance(id: number, data: Partial<Balance>): Promise<Balance | null> {
+  async updateBalance(id: string, data: Partial<Balance>): Promise<Balance | null> {
     // Валидация данных
     this.validateBalanceData(data);
     
@@ -54,7 +54,7 @@ export class BalanceService extends BaseService<Balance> {
     return await this.findById(id);
   }
 
-  async deleteBalance(id: number): Promise<boolean> {
+  async deleteBalance(id: string): Promise<boolean> {
     const balance = await this.findById(id);
     if (!balance) {
       return false;
@@ -70,14 +70,14 @@ export class BalanceService extends BaseService<Balance> {
   }
 
   // Методы для работы с балансами бенефициаров
-  async getBalanceByBeneficiary(beneficiaryId: number): Promise<Balance | null> {
+  async getBalanceByBeneficiary(beneficiaryId: string): Promise<Balance | null> {
     return await this.repository.findOne({
       where: { beneficiary: { beneficiaryId } },
       relations: ['beneficiary']
     });
   }
 
-  async getBalancesByBeneficiary(beneficiaryId: number): Promise<Balance[]> {
+  async getBalancesByBeneficiary(beneficiaryId: string): Promise<Balance[]> {
     return await this.repository.find({
       where: { beneficiary: { beneficiaryId } },
       relations: ['beneficiary']
@@ -85,7 +85,7 @@ export class BalanceService extends BaseService<Balance> {
   }
 
   // Методы для пополнения и списания средств
-  async addFunds(beneficiaryId: number, amount: number, currency: string, description?: string): Promise<Balance> {
+  async addFunds(beneficiaryId: string, amount: number, currency: string, description?: string): Promise<Balance> {
     const balance = await this.getBalanceByBeneficiary(beneficiaryId);
     
     if (!balance) {
@@ -108,7 +108,7 @@ export class BalanceService extends BaseService<Balance> {
     return await this.findById(balance.balanceId) as Balance;
   }
 
-  async withdrawFunds(beneficiaryId: number, amount: number, currency: string, description?: string): Promise<Balance> {
+  async withdrawFunds(beneficiaryId: string, amount: number, currency: string, description?: string): Promise<Balance> {
     const balance = await this.getBalanceByBeneficiary(beneficiaryId);
     
     if (!balance) {
@@ -129,7 +129,7 @@ export class BalanceService extends BaseService<Balance> {
   }
 
   // Методы для работы с холдами
-  async createHold(beneficiaryId: number, amount: number, currency: string, reason: string): Promise<Hold> {
+  async createHold(beneficiaryId: string, amount: number, currency: string, reason: string): Promise<Hold> {
     const balance = await this.getBalanceByBeneficiary(beneficiaryId);
     
     if (!balance) {
@@ -152,14 +152,14 @@ export class BalanceService extends BaseService<Balance> {
     return await this.holdRepository.save(hold);
   }
 
-  async getHoldsByBeneficiary(beneficiaryId: number): Promise<Hold[]> {
+  async getHoldsByBeneficiary(beneficiaryId: string): Promise<Hold[]> {
     return await this.holdRepository.find({
       where: { beneficiary: { beneficiaryId } },
       relations: ['beneficiary']
     });
   }
 
-  async getActiveHoldsByBeneficiary(beneficiaryId: number): Promise<Hold[]> {
+  async getActiveHoldsByBeneficiary(beneficiaryId: string): Promise<Hold[]> {
     return await this.holdRepository.find({
       where: { 
         beneficiary: { beneficiaryId },
@@ -169,7 +169,7 @@ export class BalanceService extends BaseService<Balance> {
     });
   }
 
-  async releaseHold(holdId: number): Promise<Hold | null> {
+  async releaseHold(holdId: string): Promise<Hold | null> {
     const hold = await this.holdRepository.findOne({
       where: { holdId }
     });
@@ -190,7 +190,7 @@ export class BalanceService extends BaseService<Balance> {
     return await this.holdRepository.findOne({ where: { holdId } });
   }
 
-  async executeHold(holdId: number): Promise<Hold | null> {
+  async executeHold(holdId: string): Promise<Hold | null> {
     const hold = await this.holdRepository.findOne({
       where: { holdId }
     });
@@ -215,7 +215,7 @@ export class BalanceService extends BaseService<Balance> {
   }
 
   // Методы для получения информации по остаткам
-  async getBalanceInfo(beneficiaryId: number): Promise<{
+  async getBalanceInfo(beneficiaryId: string): Promise<{
     balance: Balance | null;
     availableAmount: number;
     heldAmount: number;
@@ -239,7 +239,7 @@ export class BalanceService extends BaseService<Balance> {
   }
 
   // Методы для получения информации по холдам
-  async getHoldInfo(beneficiaryId: number): Promise<{
+  async getHoldInfo(beneficiaryId: string): Promise<{
     totalHolds: number;
     activeHolds: number;
     releasedHolds: number;
@@ -363,8 +363,57 @@ export class BalanceService extends BaseService<Balance> {
       throw new Error('Currency code must be 3 characters long');
     }
 
-    if (data.beneficiaryId && data.beneficiaryId <= 0) {
+    if (data.beneficiaryId && data.beneficiaryId.length === 0) {
       throw new Error('Invalid beneficiary ID');
     }
+  }
+
+  // Новые методы согласно спецификации биллинга
+  async findHolds(options: {
+    accountNumber: string;
+    beneficiaryId?: string;
+    offset: number;
+    limit: number;
+  }): Promise<[any[], number]> {
+    // В реальном приложении здесь была бы логика получения холдов
+    // Пока возвращаем заглушку
+    const mockHolds = [{
+      beneficiaryId: options.beneficiaryId || "61f656e0-0a86-4ec2-bd43-232499f7ad66",
+      accountNumber: options.accountNumber,
+      holdId: this.generateUUID(),
+      dealId: "dd6c3237-9958-47d9-9ba0-f6faeaa0e788",
+      stepId: "c87d3297-f4ae-4f88-add9-6722c1fc0b8c",
+      recipientId: "00021d4e-536f-11ec-ac0b-370ccfeacec2",
+      paymentId: "58097aa1-9660-47e7-8550-f2167fa80cea",
+      amount: 100
+    }];
+
+    return [mockHolds, 1];
+  }
+
+  async findBalances(options: {
+    accountNumber: string;
+    beneficiaryId?: string;
+    offset: number;
+    limit: number;
+  }): Promise<[any[], number]> {
+    // В реальном приложении здесь была бы логика получения балансов
+    // Пока возвращаем заглушку
+    const mockBalances = [{
+      beneficiaryId: options.beneficiaryId || "61f656e0-0a86-4ec2-bd43-232499f7ad66",
+      accountNumber: options.accountNumber,
+      amount: 7500,
+      amountOnHold: 1000
+    }];
+
+    return [mockBalances, 1];
+  }
+
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 } 

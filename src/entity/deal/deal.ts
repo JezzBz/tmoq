@@ -6,8 +6,8 @@ import { Step } from "./step";
 
 @Entity()
 export class Deal {
-    @PrimaryGeneratedColumn()
-    dealId!: number;
+    @PrimaryGeneratedColumn("uuid")
+    dealId!: string;
 
     @Column()
     title!: string;
@@ -22,8 +22,8 @@ export class Deal {
     currency!: string;
 
     @Column({
-        type: "enum",
-        enum: DealStatus,
+        type: "varchar",
+        length: 50,
         default: DealStatus.DRAFT
     })
     status!: DealStatus;
@@ -33,7 +33,7 @@ export class Deal {
     beneficiary!: Beneficiary;
 
     @Column()
-    beneficiaryId!: number;
+    beneficiaryId!: string;
 
     @OneToMany(() => Payment, payment => payment.deal)
     payments?: Payment[];

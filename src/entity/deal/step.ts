@@ -6,8 +6,8 @@ import { Recipient } from "./recipient";
 
 @Entity()
 export class Step {
-    @PrimaryGeneratedColumn()
-    stepId!: number;
+    @PrimaryGeneratedColumn("uuid")
+    stepId!: string;
 
     @Column()
     title!: string;
@@ -22,8 +22,8 @@ export class Step {
     currency!: string;
 
     @Column({
-        type: "enum",
-        enum: StepStatus,
+        type: "varchar",
+        length: 50,
         default: StepStatus.DRAFT
     })
     status!: StepStatus;
@@ -33,7 +33,7 @@ export class Step {
     deal!: Deal;
 
     @Column()
-    dealId!: number;
+    dealId!: string;
 
     @OneToMany(() => Deponent, deponent => deponent.step)
     deponents?: Deponent[];

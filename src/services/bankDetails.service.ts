@@ -15,63 +15,137 @@ export class BankDetailsService extends BaseService<BankDetails> {
     this.beneficiaryRepository = beneficiaryRepository;
   }
 
-  async findById(id: number): Promise<BankDetails | null> {
+  async findById(id: string): Promise<BankDetails | null> {
     return await this.repository.findOne({
       where: { bankDetailsId: id },
       relations: ['beneficiary']
     });
   }
 
-  async createBankDetails(data: Partial<BankDetails>): Promise<BankDetails> {
-    // Валидация данных
-    this.validateBankDetailsData(data);
-    
+  async findByIdWithBeneficiary(bankDetailsId: string, beneficiaryId: string): Promise<BankDetails | null> {
+    return await this.repository.findOne({
+      where: { 
+        bankDetailsId: bankDetailsId,
+        beneficiary: { beneficiaryId: beneficiaryId }
+      },
+      relations: ['beneficiary']
+    });
+  }
+
+  async findByBeneficiaryId(beneficiaryId: string, limit: number, offset: number): Promise<[BankDetails[], number]> {
+    return await this.repository.findAndCount({
+      where: { beneficiary: { beneficiaryId: beneficiaryId } },
+      relations: ['beneficiary'],
+      skip: offset,
+      take: limit,
+      order: { createdAt: 'DESC' }
+    });
+  }
+
+  async createBankDetails(beneficiaryId: string, data: any, idempotencyKey: string): Promise<BankDetails> {
     // Проверяем существование бенефициара
-    if (data.beneficiaryId) {
-      const beneficiary = await this.beneficiaryRepository.findOne({
-        where: { beneficiaryId: data.beneficiaryId }
-      });
-      if (!beneficiary) {
-        throw new Error('Beneficiary not found');
-      }
+    const beneficiary = await this.beneficiaryRepository.findOne({
+      where: { beneficiaryId: beneficiaryId }
+    });
+    if (!beneficiary) {
+      throw new Error('Beneficiary not found');
     }
 
-    const bankDetails = this.repository.create(data);
-    return await this.repository.save(bankDetails);
-  }
+    // Проверяем идемпотентность
+    const existingRequest = await this.repository.findOne({
+      where: { 
+        beneficiary: { beneficiaryId: beneficiaryId },
+        // Здесь можно добавить проверку по idempotencyKey если есть соответствующее поле
+      }
+    });
 
-  async updateBankDetails(id: number, data: Partial<BankDetails>): Promise<BankDetails | null> {
+    if (existingRequest) {
+      return existingRequest;
+    }
+
     // Валидация данных
     this.validateBankDetailsData(data);
-    
-    await this.repository.update({ bankDetailsId: id }, data);
-    return await this.findById(id);
+
+    const bankDetails = this.repository.create({
+      ...data,
+      beneficiaryId: beneficiaryId
+    });
+    const savedBankDetails = await this.repository.save(bankDetails);
+    return Array.isArray(savedBankDetails) ? savedBankDetails[0] : savedBankDetails;
   }
 
-  async deleteBankDetails(id: number): Promise<boolean> {
-    const bankDetails = await this.findById(id);
+  async setDefault(beneficiaryId: string, bankDetailsId: string): Promise<boolean> {
+    return await this.setDefaultBankDetails(beneficiaryId, bankDetailsId);
+  }
+
+  async createAddCardRequest(beneficiaryId: string, terminalKey: string, idempotencyKey: string): Promise<any> {
+    // Проверяем существование бенефициара
+    const beneficiary = await this.beneficiaryRepository.findOne({
+      where: { beneficiaryId: beneficiaryId }
+    });
+    if (!beneficiary) {
+      throw new Error('Beneficiary not found');
+    }
+
+    // Генерируем уникальный ID для запроса
+    const addCardRequestId = this.generateUUID();
+    
+    // В реальном приложении здесь была бы интеграция с платежной системой
+    const addCardUrl = `https://securepay.tinkoff.ru/e2c/${addCardRequestId}`;
+
+    return {
+      beneficiaryId,
+      addCardRequestId,
+      terminalKey,
+      status: 'PENDING',
+      addCardUrl
+    };
+  }
+
+  async updateBankDetailsWithBeneficiary(bankDetailsId: string, beneficiaryId: string, data: any): Promise<BankDetails | null> {
+    const bankDetails = await this.repository.findOne({
+      where: { 
+        bankDetailsId: bankDetailsId,
+        beneficiary: { beneficiaryId: beneficiaryId }
+      }
+    });
+
+    if (!bankDetails) {
+      return null;
+    }
+
+    // Валидация данных
+    this.validateBankDetailsData(data);
+
+    await this.repository.update(bankDetailsId, data);
+    return await this.findById(bankDetailsId);
+  }
+
+  async deleteBankDetailsWithBeneficiary(bankDetailsId: string, beneficiaryId: string): Promise<boolean> {
+    const bankDetails = await this.repository.findOne({
+      where: { 
+        bankDetailsId: bankDetailsId,
+        beneficiary: { beneficiaryId: beneficiaryId }
+      }
+    });
+
     if (!bankDetails) {
       return false;
     }
 
-    // Проверяем, можно ли удалить реквизиты
-    if (bankDetails.isDefault) {
-      throw new Error('Default bank details cannot be deleted');
-    }
-
-    const result = await this.repository.delete({ bankDetailsId: id });
+    const result = await this.repository.delete(bankDetailsId);
     return result.affected ? result.affected > 0 : false;
   }
 
   // Методы для работы с реквизитами бенефициара
-  async getBankDetailsByBeneficiary(beneficiaryId: number): Promise<BankDetails[]> {
+  async getBankDetailsByBeneficiary(beneficiaryId: string): Promise<BankDetails[]> {
     return await this.repository.find({
       where: { beneficiary: { beneficiaryId } },
       relations: ['beneficiary']
     });
   }
 
-  async getDefaultBankDetails(beneficiaryId: number): Promise<BankDetails | null> {
+  async getDefaultBankDetails(beneficiaryId: string): Promise<BankDetails | null> {
     return await this.repository.findOne({
       where: { 
         beneficiary: { beneficiaryId },
@@ -81,7 +155,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
     });
   }
 
-  async setDefaultBankDetails(beneficiaryId: number, bankDetailsId: number): Promise<boolean> {
+  async setDefaultBankDetails(beneficiaryId: string, bankDetailsId: string): Promise<boolean> {
     // Сначала сбрасываем все реквизиты как не по умолчанию
     await this.repository.update(
       { beneficiary: { beneficiaryId } },
@@ -98,7 +172,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
   }
 
   // Методы для работы с реквизитами типа CARD
-  async createCardRequest(beneficiaryId: number, cardData: Partial<BankDetails>): Promise<BankDetails> {
+  async createCardRequest(beneficiaryId: string, cardData: Partial<BankDetails>): Promise<BankDetails> {
     const beneficiary = await this.beneficiaryRepository.findOne({
       where: { beneficiaryId }
     });
@@ -116,7 +190,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
     return await this.repository.save(cardRequest);
   }
 
-  async getCardRequest(beneficiaryId: number): Promise<BankDetails | null> {
+  async getCardRequest(beneficiaryId: string): Promise<BankDetails | null> {
     return await this.repository.findOne({
       where: { 
         beneficiary: { beneficiaryId },
@@ -127,7 +201,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
     });
   }
 
-  async approveCardRequest(bankDetailsId: number): Promise<BankDetails | null> {
+  async approveCardRequest(bankDetailsId: string): Promise<BankDetails | null> {
     await this.repository.update(bankDetailsId, { 
       status: 'APPROVED',
       approvedAt: new Date()
@@ -135,7 +209,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
     return await this.findById(bankDetailsId);
   }
 
-  async rejectCardRequest(bankDetailsId: number, reason?: string): Promise<BankDetails | null> {
+  async rejectCardRequest(bankDetailsId: string, reason?: string): Promise<BankDetails | null> {
     await this.repository.update(bankDetailsId, { 
       status: 'REJECTED',
       rejectedAt: new Date(),
@@ -145,7 +219,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
   }
 
   // Методы для работы с банковскими реквизитами
-  async updateBeneficiaryBankDetails(beneficiaryId: number, bankDetailsId: number, data: Partial<BankDetails>): Promise<BankDetails | null> {
+  async updateBeneficiaryBankDetails(beneficiaryId: string, bankDetailsId: string, data: Partial<BankDetails>): Promise<BankDetails | null> {
     // Проверяем, что реквизиты принадлежат бенефициару
     const bankDetails = await this.repository.findOne({
       where: { 
@@ -199,7 +273,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
   }
 
   // Методы для валидации банковских реквизитов
-  async validateBankDetails(bankDetailsId: number): Promise<{
+  async validateBankDetails(bankDetailsId: string): Promise<{
     isValid: boolean;
     errors: string[];
   }> {
@@ -243,7 +317,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
   }
 
   // Методы для работы с реквизитами по умолчанию
-  async getDefaultBankDetailsByType(beneficiaryId: number, type: BankDetailsType): Promise<BankDetails | null> {
+  async getDefaultBankDetailsByType(beneficiaryId: string, type: BankDetailsType): Promise<BankDetails | null> {
     return await this.repository.findOne({
       where: { 
         beneficiary: { beneficiaryId },
@@ -254,7 +328,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
     });
   }
 
-  async setDefaultBankDetailsByType(beneficiaryId: number, type: BankDetailsType, bankDetailsId: number): Promise<boolean> {
+  async setDefaultBankDetailsByType(beneficiaryId: string, type: BankDetailsType, bankDetailsId: string): Promise<boolean> {
     // Сбрасываем все реквизиты данного типа как не по умолчанию
     await this.repository.update(
       { 
@@ -278,7 +352,7 @@ export class BankDetailsService extends BaseService<BankDetails> {
   }
 
   // Статистика по банковским реквизитам
-  async getBankDetailsStatistics(beneficiaryId?: number): Promise<{
+  async getBankDetailsStatistics(beneficiaryId?: string): Promise<{
     total: number;
     accounts: number;
     cards: number;
@@ -332,8 +406,16 @@ export class BankDetailsService extends BaseService<BankDetails> {
       }
     }
 
-    if (data.beneficiaryId && data.beneficiaryId <= 0) {
+    if (data.beneficiaryId && data.beneficiaryId.length === 0) {
       throw new Error('Invalid beneficiary ID');
     }
+  }
+
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 } 

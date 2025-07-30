@@ -11,7 +11,7 @@ export abstract class BaseService<T extends ObjectLiteral> {
     return await this.repository.find(options);
   }
 
-  async findById(id: number): Promise<T | null> {
+  async findById(id: number | string): Promise<T | null> {
     return await this.repository.findOne({ where: { id } as any });
   }
 

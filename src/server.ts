@@ -11,10 +11,7 @@ import nominalAccountsRoutes from './routes/nominal-accounts';
 import beneficiariesRoutes from './routes/beneficiaries';
 import dealsRoutes from './routes/deals';
 import paymentsRoutes from './routes/payments';
-import stepsRoutes from './routes/steps';
-import bankDetailsRoutes from './routes/bankDetails';
-import balancesRoutes from './routes/balances';
-import transfersRoutes from './routes/transfers';
+
 
 const app: Application = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
@@ -38,11 +35,8 @@ app.get('/health', (req: Request, res: Response) => {
 app.use('/api/v1/nominal-accounts', nominalAccountsRoutes);
 app.use('/api/v1/beneficiaries', beneficiariesRoutes);
 app.use('/api/v1/deals', dealsRoutes);
-app.use('/api/v1/payments', paymentsRoutes);
-app.use('/api/v1/steps', stepsRoutes);
-app.use('/api/v1/bank-details', bankDetailsRoutes);
-app.use('/api/v1/balances', balancesRoutes);
-app.use('/api/v1/transfers', transfersRoutes);
+app.use('/api/v1', paymentsRoutes); // Монтируем платежи на корень /api/v1
+
 
 // 404 handler
 app.use('*', (req: Request, res: Response) => {

@@ -7,11 +7,8 @@ export class Document {
     @PrimaryGeneratedColumn()
     documentId!: number;
 
-    @Column({
-        type: "enum",
-        enum: DocumentType
-    })
-    type!: DocumentType;
+    @Column()
+    type!: string;
 
     @Column({ nullable: true })
     serial?: string;

@@ -5,12 +5,12 @@ import { Document } from "./document";
 
 @Entity()
 export class Beneficiary {
-    @PrimaryGeneratedColumn()
-    beneficiaryId!: number;
+    @PrimaryGeneratedColumn("uuid")
+    beneficiaryId!: string;
 
     @Column({
-        type: "enum",
-        enum: BenefeciaryType
+        type: "varchar",
+        length: 50
     })
     type!: BenefeciaryType;
 
@@ -39,6 +39,9 @@ export class Beneficiary {
     phoneNumber?: string;
 
     @Column({ nullable: true })
+    email?: string;
+
+    @Column({ nullable: true })
     name?: string; // для UL/ИП
 
     @Column({ nullable: true })
@@ -49,6 +52,24 @@ export class Beneficiary {
 
     @Column({ nullable: true })
     kpp?: string;
+
+    @Column({ nullable: true })
+    snils?: string;
+
+    @Column({ nullable: true })
+    registrationDate?: Date;
+
+    @Column({ nullable: true })
+    opf?: string;
+
+    @Column({ nullable: true })
+    nza?: string;
+
+    @Column({ nullable: true })
+    registrationNumber?: string;
+
+    @Column({ nullable: true })
+    kio?: string;
 
     @OneToMany(() => Address, address => address.beneficiary)
     addresses?: Address[];
