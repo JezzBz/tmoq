@@ -3,9 +3,21 @@ import { services } from '../config/services';
 
 const router: Router = Router();
 
-// Базовые CRUD операции для сделок
-
-// POST /api/v1/deals - Создать сделку (4.5)
+/**
+ * POST /api/v1/deals
+ * Создание новой сделки
+ * 
+ * @param {string} req.headers['idempotency-key'] - Ключ идемпотентности (обязательный)
+ * @param {Object} req.body - Данные сделки
+ * @param {string} req.body.accountNumber - Номер номинального счета (20 или 22 цифры)
+ * @param {string} req.body.beneficiaryId - ID бенефициара (для полной сделки)
+ * @param {string} req.body.title - Название сделки (для полной сделки)
+ * @param {number} req.body.amount - Сумма сделки (для полной сделки)
+ * @param {string} req.body.currency - Валюта сделки (для полной сделки)
+ * 
+ * @returns {Object} 201 - Созданная сделка
+ * @returns {Object} 400 - Ошибка валидации
+ */
 router.post('/', async (req: Request, res: Response) => {
   try {
     const idempotencyKey = req.headers['idempotency-key'] as string;
@@ -17,7 +29,7 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
     
-    // Если передан accountNumber, создаем сделку с номером счета
+    // Создание сделки с номером счета (упрощенный вариант)
     if (dealData.accountNumber) {
       const deal = await services.dealService.createDealWithAccount(dealData.accountNumber);
       return res.status(201).json({
@@ -27,7 +39,7 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
     
-    // Иначе создаем обычную сделку
+    // Создание полной сделки с бенефициаром
     if (!dealData.beneficiaryId || !dealData.title || !dealData.amount || !dealData.currency) {
       return res.status(400).json({
         error: 'beneficiaryId, title, amount, and currency are required'
@@ -52,19 +64,28 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/deals - Получить все сделки (4.4)
+/**
+ * GET /api/v1/deals
+ * Получение списка сделок с пагинацией
+ * 
+ * @param {number} req.query.offset - Смещение (по умолчанию: 0)
+ * @param {number} req.query.limit - Лимит записей (по умолчанию: 50)
+ * 
+ * @returns {Object} 200 - Список сделок с метаданными пагинации
+ * @returns {Object} 500 - Ошибка сервера
+ */
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { offset = 0, limit = 50 } = req.query;
     
     const deals = await services.dealService.findAll();
     
-    // Применяем пагинацию
+    // Применение пагинации на уровне приложения
     const startIndex = Number(offset);
     const endIndex = startIndex + Number(limit);
     const paginatedDeals = deals.slice(startIndex, endIndex);
     
-    // Форматируем ответ согласно спецификации
+    // Форматирование ответа согласно API спецификации
     const formattedDeals = paginatedDeals.map(deal => ({
       dealId: deal.dealId,
       accountNumber: deal.accountNumber,
@@ -87,7 +108,16 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/deals/{dealId} - Получить сделку по ID (4.6)
+/**
+ * GET /api/v1/deals/{dealId}
+ * Получение сделки по идентификатору
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * 
+ * @returns {Object} 200 - Данные сделки
+ * @returns {Object} 404 - Сделка не найдена
+ * @returns {Object} 500 - Ошибка сервера
+ */
 router.get('/:dealId', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -100,7 +130,7 @@ router.get('/:dealId', async (req: Request, res: Response) => {
       });
     }
 
-    // Форматируем ответ согласно спецификации
+    // Форматирование ответа согласно API спецификации
     return res.json({
       dealId: deal.dealId,
       accountNumber: deal.accountNumber,
@@ -115,7 +145,17 @@ router.get('/:dealId', async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/v1/deals/{dealId} - Обновить сделку
+/**
+ * PUT /api/v1/deals/{dealId}
+ * Обновление данных сделки
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {Object} req.body - Данные для обновления
+ * 
+ * @returns {Object} 200 - Обновленная сделка
+ * @returns {Object} 404 - Сделка не найдена
+ * @returns {Object} 400 - Ошибка валидации
+ */
 router.put('/:dealId', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -139,7 +179,16 @@ router.put('/:dealId', async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/v1/deals/{dealId} - Удалить сделку (4.7)
+/**
+ * DELETE /api/v1/deals/{dealId}
+ * Удаление сделки
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * 
+ * @returns {Object} 204 - Сделка успешно удалена
+ * @returns {Object} 404 - Сделка не найдена
+ * @returns {Object} 400 - Ошибка бизнес-логики
+ */
 router.delete('/:dealId', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -155,7 +204,7 @@ router.delete('/:dealId', async (req: Request, res: Response) => {
     return res.status(204).send();
   } catch (error) {
     console.error('Error deleting deal:', error);
-    return res.status(500).json({
+    return res.status(400).json({
       error: 'Failed to delete deal',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
@@ -164,7 +213,18 @@ router.delete('/:dealId', async (req: Request, res: Response) => {
 
 // Маршруты для этапов сделок
 
-// POST /api/v1/deals/{dealId}/steps - Создать этап сделки (5.2)
+/**
+ * POST /api/v1/deals/{dealId}/steps
+ * Создание нового этапа сделки
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.headers['idempotency-key'] - Ключ идемпотентности (обязательный)
+ * @param {Object} req.body - Данные этапа
+ * @param {string} req.body.description - Описание этапа
+ * 
+ * @returns {Object} 201 - Созданный этап
+ * @returns {Object} 400 - Ошибка валидации
+ */
 router.post('/:dealId/steps', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -179,7 +239,7 @@ router.post('/:dealId/steps', async (req: Request, res: Response) => {
     
     const step = await services.dealService.createStep(dealId, stepData);
     
-    // Форматируем ответ согласно спецификации
+    // Форматирование ответа согласно API спецификации
     return res.status(201).json({
       dealId: step.dealId,
       stepId: step.stepId,
@@ -196,7 +256,17 @@ router.post('/:dealId/steps', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/deals/{dealId}/steps - Получить все этапы сделки (5.1)
+/**
+ * GET /api/v1/deals/{dealId}/steps
+ * Получение списка этапов сделки с пагинацией
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {number} req.query.offset - Смещение (по умолчанию: 0)
+ * @param {number} req.query.limit - Лимит записей (по умолчанию: 50)
+ * 
+ * @returns {Object} 200 - Список этапов с метаданными пагинации
+ * @returns {Object} 500 - Ошибка сервера
+ */
 router.get('/:dealId/steps', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -214,10 +284,22 @@ router.get('/:dealId/steps', async (req: Request, res: Response) => {
   }
 });
 
-// 3.1 GET /api/v1/deals/{dealId}/steps/{stepId}/recipients/{recipientId} - Получить реципиента по ID
+// Маршруты для реципиентов
+
+/**
+ * GET /api/v1/deals/{dealId}/steps/{stepId}/recipients/{recipientId}
+ * Получение реципиента по идентификатору
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {string} req.params.recipientId - Идентификатор реципиента
+ * 
+ * @returns {Object} 200 - Данные реципиента
+ * @returns {Object} 404 - Реципиент не найден
+ */
 router.get('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId, recipientId } = req.params;
+    const { recipientId } = req.params;
     
     const recipient = await services.dealService.getRecipientById(recipientId);
     
@@ -227,7 +309,18 @@ router.get('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Request
       });
     }
 
-    return res.json(recipient);
+    // Форматирование ответа согласно API спецификации
+    return res.json({
+      dealId: recipient.step.dealId,
+      stepId: recipient.stepId,
+      beneficiaryId: recipient.beneficiaryId,
+      recipientId: recipient.recipientId,
+      amount: recipient.amount,
+      tax: recipient.tax,
+      purpose: recipient.purpose,
+      bankDetailsId: recipient.bankDetailsId,
+      keepOnVirtualAccount: recipient.keepOnVirtualAccount
+    });
   } catch (error) {
     console.error('Error getting recipient:', error);
     return res.status(500).json({
@@ -237,26 +330,25 @@ router.get('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Request
   }
 });
 
-// 3.2 PUT /api/v1/deals/{dealId}/steps/{stepId}/recipients/{recipientId} - Обновить реципиента
+/**
+ * PUT /api/v1/deals/{dealId}/steps/{stepId}/recipients/{recipientId}
+ * Обновление данных реципиента
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {string} req.params.recipientId - Идентификатор реципиента
+ * @param {Object} req.body - Данные для обновления
+ * 
+ * @returns {Object} 200 - Обновленный реципиент
+ * @returns {Object} 404 - Реципиент не найден
+ * @returns {Object} 400 - Ошибка валидации
+ */
 router.put('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId, recipientId } = req.params;
-    const updateData = req.body;
+    const { recipientId } = req.params;
+    const recipientData = req.body;
     
-    // Валидация обязательных полей
-    if (!updateData.beneficiaryId || !updateData.amount || !updateData.purpose || !updateData.bankDetailsId) {
-      return res.status(400).json({
-        error: 'beneficiaryId, amount, purpose, and bankDetailsId are required'
-      });
-    }
-    
-    if (updateData.amount <= 0) {
-      return res.status(400).json({
-        error: 'Amount must be greater than zero'
-      });
-    }
-    
-    const recipient = await services.dealService.updateRecipient(recipientId, updateData);
+    const recipient = await services.dealService.updateRecipient(recipientId, recipientData);
     
     if (!recipient) {
       return res.status(404).json({
@@ -264,7 +356,18 @@ router.put('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Request
       });
     }
 
-    return res.json(recipient);
+    // Форматирование ответа согласно API спецификации
+    return res.json({
+      dealId: recipient.step.dealId,
+      stepId: recipient.stepId,
+      beneficiaryId: recipient.beneficiaryId,
+      recipientId: recipient.recipientId,
+      amount: recipient.amount,
+      tax: recipient.tax,
+      purpose: recipient.purpose,
+      bankDetailsId: recipient.bankDetailsId,
+      keepOnVirtualAccount: recipient.keepOnVirtualAccount
+    });
   } catch (error) {
     console.error('Error updating recipient:', error);
     return res.status(400).json({
@@ -274,10 +377,21 @@ router.put('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Request
   }
 });
 
-// 3.3 DELETE /api/v1/deals/{dealId}/steps/{stepId}/recipients/{recipientId} - Удалить реципиента
+/**
+ * DELETE /api/v1/deals/{dealId}/steps/{stepId}/recipients/{recipientId}
+ * Удаление реципиента
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {string} req.params.recipientId - Идентификатор реципиента
+ * 
+ * @returns {Object} 204 - Реципиент успешно удален
+ * @returns {Object} 404 - Реципиент не найден
+ * @returns {Object} 400 - Ошибка бизнес-логики
+ */
 router.delete('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId, recipientId } = req.params;
+    const { recipientId } = req.params;
     
     const success = await services.dealService.deleteRecipient(recipientId);
     
@@ -290,17 +404,29 @@ router.delete('/:dealId/steps/:stepId/recipients/:recipientId', async (req: Requ
     return res.status(204).send();
   } catch (error) {
     console.error('Error deleting recipient:', error);
-    return res.status(500).json({
+    return res.status(400).json({
       error: 'Failed to delete recipient',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
 
-// 3.4 GET /api/v1/deals/{dealId}/steps/{stepId}/deponents/{beneficiaryId} - Получить депонента
+// Маршруты для депонентов
+
+/**
+ * GET /api/v1/deals/{dealId}/steps/{stepId}/deponents/{beneficiaryId}
+ * Получение депонента по идентификатору бенефициара
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {string} req.params.beneficiaryId - Идентификатор бенефициара
+ * 
+ * @returns {Object} 200 - Данные депонента
+ * @returns {Object} 404 - Депонент не найден
+ */
 router.get('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId, beneficiaryId } = req.params;
+    const { stepId, beneficiaryId } = req.params;
     
     const deponent = await services.dealService.getDeponentByBeneficiaryId(stepId, beneficiaryId);
     
@@ -310,7 +436,13 @@ router.get('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Reques
       });
     }
 
-    return res.json(deponent);
+    // Форматирование ответа согласно API спецификации
+    return res.json({
+      dealId: deponent.step.dealId,
+      stepId: deponent.stepId,
+      beneficiaryId: deponent.beneficiaryId,
+      amount: deponent.amount
+    });
   } catch (error) {
     console.error('Error getting deponent:', error);
     return res.status(500).json({
@@ -320,27 +452,36 @@ router.get('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Reques
   }
 });
 
-// 3.5 PUT /api/v1/deals/{dealId}/steps/{stepId}/deponents/{beneficiaryId} - Создать или обновить депонента
+/**
+ * PUT /api/v1/deals/{dealId}/steps/{stepId}/deponents/{beneficiaryId}
+ * Создание или обновление депонента
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {string} req.params.beneficiaryId - Идентификатор бенефициара
+ * @param {Object} req.body - Данные депонента
+ * @param {number} req.body.amount - Сумма депонирования
+ * 
+ * @returns {Object} 200 - Созданный/обновленный депонент
+ * @returns {Object} 400 - Ошибка валидации
+ */
 router.put('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId, beneficiaryId } = req.params;
-    const { amount } = req.body;
+    const { stepId, beneficiaryId } = req.params;
+    const deponentData = req.body;
     
-    if (!amount || amount <= 0) {
-      return res.status(400).json({
-        error: 'Amount is required and must be greater than zero'
-      });
-    }
-    
-    const deponentData = {
-      stepId,
-      beneficiaryId,
-      amount
-    };
-    
-    const deponent = await services.dealService.createOrUpdateDeponent(stepId, deponentData);
-    
-    return res.json(deponent);
+    const deponent = await services.dealService.createOrUpdateDeponent(stepId, {
+      ...deponentData,
+      beneficiaryId
+    });
+
+    // Форматирование ответа согласно API спецификации
+    return res.json({
+      dealId: deponent.step.dealId,
+      stepId: deponent.stepId,
+      beneficiaryId: deponent.beneficiaryId,
+      amount: deponent.amount
+    });
   } catch (error) {
     console.error('Error creating/updating deponent:', error);
     return res.status(400).json({
@@ -350,10 +491,21 @@ router.put('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Reques
   }
 });
 
-// 3.6 DELETE /api/v1/deals/{dealId}/steps/{stepId}/deponents/{beneficiaryId} - Удалить депонента
+/**
+ * DELETE /api/v1/deals/{dealId}/steps/{stepId}/deponents/{beneficiaryId}
+ * Удаление депонента
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {string} req.params.beneficiaryId - Идентификатор бенефициара
+ * 
+ * @returns {Object} 204 - Депонент успешно удален
+ * @returns {Object} 404 - Депонент не найден
+ * @returns {Object} 400 - Ошибка бизнес-логики
+ */
 router.delete('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId, beneficiaryId } = req.params;
+    const { stepId, beneficiaryId } = req.params;
     
     const success = await services.dealService.deleteDeponentByBeneficiaryId(stepId, beneficiaryId);
     
@@ -366,32 +518,51 @@ router.delete('/:dealId/steps/:stepId/deponents/:beneficiaryId', async (req: Req
     return res.status(204).send();
   } catch (error) {
     console.error('Error deleting deponent:', error);
-    return res.status(500).json({
+    return res.status(400).json({
       error: 'Failed to delete deponent',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
 
-// 3.7 GET /api/v1/deals/{dealId}/steps/{stepId}/deponents - Получить всех депонентов этапа
+/**
+ * GET /api/v1/deals/{dealId}/steps/{stepId}/deponents
+ * Получение списка депонентов этапа с пагинацией
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {number} req.query.offset - Смещение (по умолчанию: 0)
+ * @param {number} req.query.limit - Лимит записей (по умолчанию: 50)
+ * 
+ * @returns {Object} 200 - Список депонентов с метаданными пагинации
+ * @returns {Object} 500 - Ошибка сервера
+ */
 router.get('/:dealId/steps/:stepId/deponents', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId } = req.params;
+    const { stepId } = req.params;
     const { offset = 0, limit = 50 } = req.query;
     
     const deponents = await services.dealService.getDeponents(stepId);
     
-    // Применяем пагинацию
+    // Применение пагинации на уровне приложения
     const startIndex = Number(offset);
     const endIndex = startIndex + Number(limit);
     const paginatedDeponents = deponents.slice(startIndex, endIndex);
     
+    // Форматирование ответа согласно API спецификации
+    const formattedDeponents = paginatedDeponents.map(deponent => ({
+      dealId: deponent.step.dealId,
+      stepId: deponent.stepId,
+      beneficiaryId: deponent.beneficiaryId,
+      amount: deponent.amount
+    }));
+    
     return res.json({
       offset: Number(offset),
       limit: Number(limit),
-      size: paginatedDeponents.length,
+      size: formattedDeponents.length,
       total: deponents.length,
-      results: paginatedDeponents
+      results: formattedDeponents
     });
   } catch (error) {
     console.error('Error getting deponents:', error);
@@ -402,27 +573,34 @@ router.get('/:dealId/steps/:stepId/deponents', async (req: Request, res: Respons
   }
 });
 
-// 3.8 POST /api/v1/deals/{dealId}/steps/{stepId}/recipients/{recipientId}/update-bank-details - Обновить банковские реквизиты реципиента
+/**
+ * POST /api/v1/deals/{dealId}/steps/{stepId}/recipients/{recipientId}/update-bank-details
+ * Обновление банковских реквизитов реципиента при неуспешности платежа
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {string} req.params.recipientId - Идентификатор реципиента
+ * @param {Object} req.body - Данные банковских реквизитов
+ * @param {string} req.body.bankDetailsId - Идентификатор банковских реквизитов
+ * 
+ * @returns {Object} 200 - Обновленный реципиент
+ * @returns {Object} 404 - Реципиент не найден
+ * @returns {Object} 400 - Ошибка валидации
+ */
 router.post('/:dealId/steps/:stepId/recipients/:recipientId/update-bank-details', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId, recipientId } = req.params;
+    const { recipientId } = req.params;
     const { bankDetailsId } = req.body;
     
-    if (!bankDetailsId) {
-      return res.status(400).json({
-        error: 'bankDetailsId is required'
-      });
-    }
+    const recipient = await services.dealService.updateRecipientBankDetails(recipientId, bankDetailsId);
     
-    const updatedRecipient = await services.dealService.updateRecipientBankDetails(recipientId, bankDetailsId);
-    
-    if (!updatedRecipient) {
+    if (!recipient) {
       return res.status(404).json({
         error: 'Recipient not found'
       });
     }
 
-    return res.status(200).send();
+    return res.json(recipient);
   } catch (error) {
     console.error('Error updating recipient bank details:', error);
     return res.status(400).json({
@@ -432,25 +610,49 @@ router.post('/:dealId/steps/:stepId/recipients/:recipientId/update-bank-details'
   }
 });
 
-// 3.9 GET /api/v1/deals/{dealId}/steps/{stepId}/recipients - Получить всех реципиентов этапа
+/**
+ * GET /api/v1/deals/{dealId}/steps/{stepId}/recipients
+ * Получение списка реципиентов этапа с пагинацией
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {number} req.query.offset - Смещение (по умолчанию: 0)
+ * @param {number} req.query.limit - Лимит записей (по умолчанию: 50)
+ * 
+ * @returns {Object} 200 - Список реципиентов с метаданными пагинации
+ * @returns {Object} 500 - Ошибка сервера
+ */
 router.get('/:dealId/steps/:stepId/recipients', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId } = req.params;
+    const { stepId } = req.params;
     const { offset = 0, limit = 50 } = req.query;
     
     const recipients = await services.dealService.getRecipients(stepId);
     
-    // Применяем пагинацию
+    // Применение пагинации на уровне приложения
     const startIndex = Number(offset);
     const endIndex = startIndex + Number(limit);
     const paginatedRecipients = recipients.slice(startIndex, endIndex);
     
+    // Форматирование ответа согласно API спецификации
+    const formattedRecipients = paginatedRecipients.map(recipient => ({
+      dealId: recipient.step.dealId,
+      stepId: recipient.stepId,
+      beneficiaryId: recipient.beneficiaryId,
+      recipientId: recipient.recipientId,
+      amount: recipient.amount,
+      tax: recipient.tax,
+      purpose: recipient.purpose,
+      bankDetailsId: recipient.bankDetailsId,
+      keepOnVirtualAccount: recipient.keepOnVirtualAccount
+    }));
+    
     return res.json({
       offset: Number(offset),
       limit: Number(limit),
-      size: paginatedRecipients.length,
+      size: formattedRecipients.length,
       total: recipients.length,
-      results: paginatedRecipients
+      results: formattedRecipients
     });
   } catch (error) {
     console.error('Error getting recipients:', error);
@@ -461,12 +663,29 @@ router.get('/:dealId/steps/:stepId/recipients', async (req: Request, res: Respon
   }
 });
 
-// 3.10 POST /api/v1/deals/{dealId}/steps/{stepId}/recipients - Создать реципиента
+/**
+ * POST /api/v1/deals/{dealId}/steps/{stepId}/recipients
+ * Создание нового реципиента на этапе сделки
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {string} req.headers['idempotency-key'] - Ключ идемпотентности (обязательный)
+ * @param {Object} req.body - Данные реципиента
+ * @param {string} req.body.beneficiaryId - Идентификатор бенефициара
+ * @param {number} req.body.amount - Сумма
+ * @param {number} req.body.tax - Налог
+ * @param {string} req.body.purpose - Назначение платежа
+ * @param {string} req.body.bankDetailsId - Идентификатор банковских реквизитов
+ * @param {boolean} req.body.keepOnVirtualAccount - Оставить на виртуальном счете
+ * 
+ * @returns {Object} 201 - Созданный реципиент
+ * @returns {Object} 400 - Ошибка валидации
+ */
 router.post('/:dealId/steps/:stepId/recipients', async (req: Request, res: Response) => {
   try {
-    const { dealId, stepId } = req.params;
-    const idempotencyKey = req.headers['idempotency-key'] as string;
+    const { stepId } = req.params;
     const recipientData = req.body;
+    const idempotencyKey = req.headers['idempotency-key'] as string;
     
     if (!idempotencyKey) {
       return res.status(400).json({
@@ -474,22 +693,20 @@ router.post('/:dealId/steps/:stepId/recipients', async (req: Request, res: Respo
       });
     }
     
-    // Валидация обязательных полей
-    if (!recipientData.beneficiaryId || !recipientData.amount || !recipientData.purpose || !recipientData.bankDetailsId) {
-      return res.status(400).json({
-        error: 'beneficiaryId, amount, purpose, and bankDetailsId are required'
-      });
-    }
-    
-    if (recipientData.amount <= 0) {
-      return res.status(400).json({
-        error: 'Amount must be greater than zero'
-      });
-    }
-    
     const recipient = await services.dealService.createRecipient(stepId, recipientData);
-    
-    return res.status(201).json(recipient);
+
+    // Форматирование ответа согласно API спецификации
+    return res.status(201).json({
+      dealId: recipient.step.dealId,
+      stepId: recipient.stepId,
+      beneficiaryId: recipient.beneficiaryId,
+      recipientId: recipient.recipientId,
+      amount: recipient.amount,
+      tax: recipient.tax,
+      purpose: recipient.purpose,
+      bankDetailsId: recipient.bankDetailsId,
+      keepOnVirtualAccount: recipient.keepOnVirtualAccount
+    });
   } catch (error) {
     console.error('Error creating recipient:', error);
     return res.status(400).json({
@@ -499,11 +716,18 @@ router.post('/:dealId/steps/:stepId/recipients', async (req: Request, res: Respo
   }
 });
 
-export default router;
-
 // Маршруты управления сделками
 
-// 4.1 POST /api/v1/deals/{dealId}/cancel - Отменить сделку
+/**
+ * POST /api/v1/deals/{dealId}/cancel
+ * Отмена сделки (перевод в статус CANCELLED)
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * 
+ * @returns {Object} 200 - Сделка успешно отменена
+ * @returns {Object} 404 - Сделка не найдена
+ * @returns {Object} 400 - Ошибка бизнес-логики
+ */
 router.post('/:dealId/cancel', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -526,24 +750,41 @@ router.post('/:dealId/cancel', async (req: Request, res: Response) => {
   }
 });
 
-// 4.2 GET /api/v1/deals/{dealId}/is-valid - Проверить валидность сделки
+/**
+ * GET /api/v1/deals/{dealId}/is-valid
+ * Проверка валидности сделки для совершения платежей
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * 
+ * @returns {Object} 200 - Результат валидации с причинами
+ * @returns {Object} 404 - Сделка не найдена
+ */
 router.get('/:dealId/is-valid', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
     
-    const validationResult = await services.dealService.isDealValid(dealId);
+    const validation = await services.dealService.isDealValid(dealId);
     
-    return res.json(validationResult);
+    return res.json(validation);
   } catch (error) {
     console.error('Error validating deal:', error);
-    return res.status(500).json({
-      error: 'Failed to validate deal',
+    return res.status(404).json({
+      error: 'Deal not found',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });
 
-// 4.3 POST /api/v1/deals/{dealId}/draft - Перевести сделку в статус DRAFT
+/**
+ * POST /api/v1/deals/{dealId}/draft
+ * Перевод сделки в статус DRAFT
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * 
+ * @returns {Object} 200 - Сделка успешно переведена в DRAFT
+ * @returns {Object} 404 - Сделка не найдена
+ * @returns {Object} 400 - Ошибка бизнес-логики
+ */
 router.post('/:dealId/draft', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -566,7 +807,16 @@ router.post('/:dealId/draft', async (req: Request, res: Response) => {
   }
 });
 
-// 4.8 POST /api/v1/deals/{dealId}/accept - Принять сделку
+/**
+ * POST /api/v1/deals/{dealId}/accept
+ * Принятие сделки (перевод в статус ACCEPTED)
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * 
+ * @returns {Object} 200 - Сделка успешно принята
+ * @returns {Object} 404 - Сделка не найдена
+ * @returns {Object} 400 - Ошибка бизнес-логики
+ */
 router.post('/:dealId/accept', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -587,11 +837,21 @@ router.post('/:dealId/accept', async (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-}); 
+});
 
 // Маршруты управления этапами сделок
 
-// 5.3 POST /api/v1/deals/{dealId}/steps/{stepId}/complete - Завершить этап
+/**
+ * POST /api/v1/deals/{dealId}/steps/{stepId}/complete
+ * Завершение этапа сделки
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * 
+ * @returns {Object} 200 - Этап успешно завершен
+ * @returns {Object} 404 - Этап не найден
+ * @returns {Object} 400 - Ошибка бизнес-логики
+ */
 router.post('/:dealId/steps/:stepId/complete', async (req: Request, res: Response) => {
   try {
     const { dealId, stepId } = req.params;
@@ -614,7 +874,17 @@ router.post('/:dealId/steps/:stepId/complete', async (req: Request, res: Respons
   }
 });
 
-// 5.4 GET /api/v1/deals/{dealId}/steps/{stepId} - Получить этап по ID
+/**
+ * GET /api/v1/deals/{dealId}/steps/{stepId}
+ * Получение этапа по идентификатору
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * 
+ * @returns {Object} 200 - Данные этапа
+ * @returns {Object} 404 - Этап не найден
+ * @returns {Object} 500 - Ошибка сервера
+ */
 router.get('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
   try {
     const { dealId, stepId } = req.params;
@@ -627,7 +897,7 @@ router.get('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
       });
     }
 
-    // Форматируем ответ согласно спецификации
+    // Форматирование ответа согласно API спецификации
     return res.json({
       dealId: step.dealId,
       stepId: step.stepId,
@@ -644,7 +914,19 @@ router.get('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
   }
 });
 
-// 5.5 PUT /api/v1/deals/{dealId}/steps/{stepId} - Обновить этап
+/**
+ * PUT /api/v1/deals/{dealId}/steps/{stepId}
+ * Обновление этапа сделки
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * @param {Object} req.body - Данные для обновления
+ * @param {string} req.body.description - Описание этапа
+ * 
+ * @returns {Object} 200 - Обновленный этап
+ * @returns {Object} 404 - Этап не найден
+ * @returns {Object} 400 - Ошибка валидации
+ */
 router.put('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
   try {
     const { dealId, stepId } = req.params;
@@ -658,7 +940,7 @@ router.put('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
       });
     }
 
-    // Форматируем ответ согласно спецификации
+    // Форматирование ответа согласно API спецификации
     return res.json({
       dealId: step.dealId,
       stepId: step.stepId,
@@ -675,7 +957,17 @@ router.put('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
   }
 });
 
-// 5.6 DELETE /api/v1/deals/{dealId}/steps/{stepId} - Удалить этап
+/**
+ * DELETE /api/v1/deals/{dealId}/steps/{stepId}
+ * Удаление этапа сделки
+ * 
+ * @param {string} req.params.dealId - Идентификатор сделки
+ * @param {string} req.params.stepId - Идентификатор этапа
+ * 
+ * @returns {Object} 204 - Этап успешно удален
+ * @returns {Object} 404 - Этап не найден
+ * @returns {Object} 400 - Ошибка бизнес-логики
+ */
 router.delete('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
   try {
     const { dealId, stepId } = req.params;
@@ -696,4 +988,6 @@ router.delete('/:dealId/steps/:stepId', async (req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
-}); 
+});
+
+export default router; 

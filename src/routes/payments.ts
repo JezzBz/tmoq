@@ -3,39 +3,33 @@ import { services } from '../config/services';
 
 const router: Router = Router();
 
-// 2.1 GET /api/v1/payments - Получить список платежей
+/**
+ * GET /api/v1/payments
+ * Получение списка платежей с пагинацией
+ * 
+ * @param {number} req.query.offset - Смещение (по умолчанию: 0)
+ * @param {number} req.query.limit - Лимит записей (по умолчанию: 50)
+ * 
+ * @returns {Object} 200 - Список платежей с метаданными пагинации
+ * @returns {Object} 500 - Ошибка сервера
+ */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { 
-      beneficiaryId, 
-      dealId, 
-      accountNumber, 
-      offset = 0, 
-      limit = 50 
-    } = req.query;
-
-    // Валидация accountNumber
-    if (accountNumber && !/^(\d{20}|\d{22})$/.test(accountNumber as string)) {
-      return res.status(400).json({
-        error: 'Invalid account number format',
-        message: 'Account number must be 20 or 22 digits'
-      });
-    }
-
-    const [payments, total] = await services.paymentService.findPayments({
-      beneficiaryId: beneficiaryId as string,
-      dealId: dealId as string,
-      accountNumber: accountNumber as string,
-      offset: Number(offset),
-      limit: Number(limit)
-    });
-
+    const { offset = 0, limit = 50 } = req.query;
+    
+    const payments = await services.paymentService.findAll();
+    
+    // Применение пагинации на уровне приложения
+    const startIndex = Number(offset);
+    const endIndex = startIndex + Number(limit);
+    const paginatedPayments = payments.slice(startIndex, endIndex);
+    
     return res.json({
       offset: Number(offset),
       limit: Number(limit),
-      size: payments.length,
-      total,
-      results: payments
+      size: paginatedPayments.length,
+      total: payments.length,
+      results: paginatedPayments
     });
   } catch (error) {
     console.error('Error getting payments:', error);
@@ -46,28 +40,53 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// 2.2 POST /api/v1/payments - Создать платеж
+/**
+ * POST /api/v1/payments
+ * Создание нового платежа
+ * 
+ * @param {string} req.headers['idempotency-key'] - Ключ идемпотентности (обязательный)
+ * @param {Object} req.body - Данные платежа
+ * @param {string} req.body.type - Тип платежа
+ * @param {number} req.body.amount - Сумма платежа
+ * @param {string} req.body.currency - Валюта платежа
+ * @param {string} req.body.description - Описание платежа
+ * @param {string} req.body.purpose - Назначение платежа
+ * @param {string} req.body.accountNumber - Номер счета
+ * @param {string} req.body.uin - УИН
+ * @param {number} req.body.tax - Налог
+ * @param {string} req.body.stepId - Идентификатор этапа
+ * @param {string} req.body.recipientId - Идентификатор реципиента
+ * @param {string} req.body.beneficiaryId - Идентификатор бенефициара
+ * @param {string} req.body.dealId - Идентификатор сделки
+ * @param {string} req.body.bankDetailsId - Идентификатор банковских реквизитов
+ * 
+ * @returns {Object} 201 - Созданный платеж
+ * @returns {Object} 400 - Ошибка валидации
+ */
 router.post('/', async (req: Request, res: Response) => {
   try {
     const idempotencyKey = req.headers['idempotency-key'] as string;
     const paymentData = req.body;
-
+    
     if (!idempotencyKey) {
       return res.status(400).json({
         error: 'Idempotency-Key header is required'
       });
     }
-
-    // Валидация обязательных полей
-    if (!paymentData.type || !paymentData.beneficiaryId || !paymentData.accountNumber || 
-        !paymentData.amount || !paymentData.purpose) {
+    
+    if (!paymentData.type || !paymentData.amount || !paymentData.currency) {
       return res.status(400).json({
-        error: 'Missing required fields',
-        message: 'type, beneficiaryId, accountNumber, amount, and purpose are required'
+        error: 'type, amount, and currency are required'
       });
     }
-
-    const payment = await services.paymentService.createPayment(paymentData, idempotencyKey);
+    
+    if (paymentData.amount <= 0) {
+      return res.status(400).json({
+        error: 'Amount must be greater than zero'
+      });
+    }
+    
+    const payment = await services.paymentService.createPayment(paymentData);
     
     return res.status(201).json(payment);
   } catch (error) {
@@ -79,242 +98,20 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// 2.3 GET /api/v1/virtual-accounts/holds - Получить список холдов
-router.get('/virtual-accounts/holds', async (req: Request, res: Response) => {
-  try {
-    const { 
-      accountNumber, 
-      beneficiaryId, 
-      offset = 0, 
-      limit = 50 
-    } = req.query;
-
-    // Валидация accountNumber
-    if (!accountNumber || !/^(\d{20}|\d{22})$/.test(accountNumber as string)) {
-      return res.status(400).json({
-        error: 'Invalid account number format',
-        message: 'Account number must be 20 or 22 digits'
-      });
-    }
-
-    const [holds, total] = await services.balanceService.findHolds({
-      accountNumber: accountNumber as string,
-      beneficiaryId: beneficiaryId as string,
-      offset: Number(offset),
-      limit: Number(limit)
-    });
-
-    return res.json({
-      offset: Number(offset),
-      limit: Number(limit),
-      size: holds.length,
-      total,
-      results: holds
-    });
-  } catch (error) {
-    console.error('Error getting holds:', error);
-    return res.status(500).json({
-      error: 'Failed to get holds',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// 2.4 GET /api/v1/incoming-transactions - Получить список входящих транзакций
-router.get('/incoming-transactions', async (req: Request, res: Response) => {
-  try {
-    const { 
-      accountNumber, 
-      offset = 0, 
-      limit = 50 
-    } = req.query;
-
-    // Валидация accountNumber
-    if (!accountNumber || !/^(\d{20}|\d{22})$/.test(accountNumber as string)) {
-      return res.status(400).json({
-        error: 'Invalid account number format',
-        message: 'Account number must be 20 or 22 digits'
-      });
-    }
-
-    const [transactions, total] = await services.paymentService.findIncomingTransactions({
-      accountNumber: accountNumber as string,
-      offset: Number(offset),
-      limit: Number(limit)
-    });
-
-    return res.json({
-      offset: Number(offset),
-      limit: Number(limit),
-      size: transactions.length,
-      total,
-      results: transactions
-    });
-  } catch (error) {
-    console.error('Error getting incoming transactions:', error);
-    return res.status(500).json({
-      error: 'Failed to get incoming transactions',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// 2.5 POST /api/v1/payments/{paymentId}/retry - Повторить неуспешный платеж
-router.post('/:paymentId/retry', async (req: Request, res: Response) => {
-  try {
-    const { paymentId } = req.params;
-
-    const retryPaymentId = await services.paymentService.retryPayment(paymentId);
-    
-    return res.json({
-      retryPaymentId
-    });
-  } catch (error) {
-    console.error('Error retrying payment:', error);
-    return res.status(400).json({
-      error: 'Failed to retry payment',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// 2.6 POST /api/v1/incoming-transactions/{operationId}/identify - Идентифицировать операцию пополнения
-router.post('/incoming-transactions/:operationId/identify', async (req: Request, res: Response) => {
-  try {
-    const { operationId } = req.params;
-    const { amountDistribution } = req.body;
-
-    if (!amountDistribution || !Array.isArray(amountDistribution)) {
-      return res.status(400).json({
-        error: 'Invalid amount distribution',
-        message: 'amountDistribution must be an array'
-      });
-    }
-
-    const result = await services.paymentService.identifyIncomingTransaction(operationId, amountDistribution);
-    
-    return res.json(result);
-  } catch (error) {
-    console.error('Error identifying incoming transaction:', error);
-    return res.status(400).json({
-      error: 'Failed to identify incoming transaction',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// 2.7 GET /api/v1/virtual-accounts/transfers/{transferId} - Получить информацию о переводе
-router.get('/virtual-accounts/transfers/:transferId', async (req: Request, res: Response) => {
-  try {
-    const { transferId } = req.params;
-
-    const transfer = await services.transferService.findById(transferId);
-    
-    if (!transfer) {
-      return res.status(404).json({
-        error: 'Transfer not found'
-      });
-    }
-
-    return res.json(transfer);
-  } catch (error) {
-    console.error('Error getting transfer:', error);
-    return res.status(500).json({
-      error: 'Failed to get transfer',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// 2.8 GET /api/v1/virtual-accounts/transfers - Получить список переводов
-router.get('/virtual-accounts/transfers', async (req: Request, res: Response) => {
-  try {
-    const { 
-      accountNumber, 
-      dealId, 
-      fromBeneficiaryId, 
-      toBeneficiaryId, 
-      limit = 50, 
-      offset = 0 
-    } = req.query;
-
-    // Валидация accountNumber
-    if (!accountNumber || !/^(\d{20}|\d{22})$/.test(accountNumber as string)) {
-      return res.status(400).json({
-        error: 'Invalid account number format',
-        message: 'Account number must be 20 or 22 digits'
-      });
-    }
-
-    if (!fromBeneficiaryId) {
-      return res.status(400).json({
-        error: 'fromBeneficiaryId is required'
-      });
-    }
-
-    const [transfers, total] = await services.transferService.findTransfers({
-      accountNumber: accountNumber as string,
-      dealId: dealId as string,
-      fromBeneficiaryId: fromBeneficiaryId as string,
-      toBeneficiaryId: toBeneficiaryId as string,
-      offset: Number(offset),
-      limit: Number(limit)
-    });
-
-    return res.json({
-      offset: Number(offset),
-      limit: Number(limit),
-      size: transfers.length,
-      total,
-      results: transfers
-    });
-  } catch (error) {
-    console.error('Error getting transfers:', error);
-    return res.status(500).json({
-      error: 'Failed to get transfers',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// 2.9 POST /api/v1/virtual-accounts/transfers - Создать перевод
-router.post('/virtual-accounts/transfers', async (req: Request, res: Response) => {
-  try {
-    const idempotencyKey = req.headers['idempotency-key'] as string;
-    const transferData = req.body;
-
-    if (!idempotencyKey) {
-      return res.status(400).json({
-        error: 'Idempotency-Key header is required'
-      });
-    }
-
-    // Валидация обязательных полей
-    if (!transferData.accountNumber || !transferData.from || !transferData.to || 
-        !transferData.amount || !transferData.purpose) {
-      return res.status(400).json({
-        error: 'Missing required fields',
-        message: 'accountNumber, from, to, amount, and purpose are required'
-      });
-    }
-
-    const transfer = await services.transferService.createTransfer(transferData, idempotencyKey);
-    
-    return res.status(201).json(transfer);
-  } catch (error) {
-    console.error('Error creating transfer:', error);
-    return res.status(400).json({
-      error: 'Failed to create transfer',
-      message: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
-});
-
-// 2.10 GET /api/v1/payments/{paymentId} - Получить платеж по ID
+/**
+ * GET /api/v1/payments/{paymentId}
+ * Получение платежа по идентификатору
+ * 
+ * @param {string} req.params.paymentId - Идентификатор платежа
+ * 
+ * @returns {Object} 200 - Данные платежа
+ * @returns {Object} 404 - Платеж не найден
+ * @returns {Object} 500 - Ошибка сервера
+ */
 router.get('/:paymentId', async (req: Request, res: Response) => {
   try {
     const { paymentId } = req.params;
-
+    
     const payment = await services.paymentService.findById(paymentId);
     
     if (!payment) {
@@ -333,42 +130,131 @@ router.get('/:paymentId', async (req: Request, res: Response) => {
   }
 });
 
-// 2.11 GET /api/v1/virtual-accounts/balances - Получить балансы виртуальных счетов
-router.get('/virtual-accounts/balances', async (req: Request, res: Response) => {
+/**
+ * PUT /api/v1/payments/{paymentId}
+ * Обновление данных платежа
+ * 
+ * @param {string} req.params.paymentId - Идентификатор платежа
+ * @param {Object} req.body - Данные для обновления
+ * 
+ * @returns {Object} 200 - Обновленный платеж
+ * @returns {Object} 404 - Платеж не найден
+ * @returns {Object} 400 - Ошибка валидации
+ */
+router.put('/:paymentId', async (req: Request, res: Response) => {
   try {
-    const { 
-      accountNumber, 
-      beneficiaryId, 
-      offset = 0, 
-      limit = 50 
-    } = req.query;
-
-    // Валидация accountNumber
-    if (!accountNumber || !/^(\d{20}|\d{22})$/.test(accountNumber as string)) {
-      return res.status(400).json({
-        error: 'Invalid account number format',
-        message: 'Account number must be 20 or 22 digits'
+    const { paymentId } = req.params;
+    const updateData = req.body;
+    
+    const payment = await services.paymentService.updatePayment(paymentId, updateData);
+    
+    if (!payment) {
+      return res.status(404).json({
+        error: 'Payment not found'
       });
     }
 
-    const [balances, total] = await services.balanceService.findBalances({
-      accountNumber: accountNumber as string,
-      beneficiaryId: beneficiaryId as string,
-      offset: Number(offset),
-      limit: Number(limit)
-    });
-
-    return res.json({
-      offset: Number(offset),
-      limit: Number(limit),
-      size: balances.length,
-      total,
-      results: balances
-    });
+    return res.json(payment);
   } catch (error) {
-    console.error('Error getting balances:', error);
-    return res.status(500).json({
-      error: 'Failed to get balances',
+    console.error('Error updating payment:', error);
+    return res.status(400).json({
+      error: 'Failed to update payment',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * DELETE /api/v1/payments/{paymentId}
+ * Удаление платежа
+ * 
+ * @param {string} req.params.paymentId - Идентификатор платежа
+ * 
+ * @returns {Object} 204 - Платеж успешно удален
+ * @returns {Object} 404 - Платеж не найден
+ * @returns {Object} 400 - Ошибка бизнес-логики
+ */
+router.delete('/:paymentId', async (req: Request, res: Response) => {
+  try {
+    const { paymentId } = req.params;
+    
+    const success = await services.paymentService.deletePayment(paymentId);
+    
+    if (!success) {
+      return res.status(404).json({
+        error: 'Payment not found'
+      });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting payment:', error);
+    return res.status(400).json({
+      error: 'Failed to delete payment',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/v1/payments/{paymentId}/execute
+ * Выполнение платежа
+ * 
+ * @param {string} req.params.paymentId - Идентификатор платежа
+ * 
+ * @returns {Object} 200 - Платеж успешно выполнен
+ * @returns {Object} 404 - Платеж не найден
+ * @returns {Object} 400 - Ошибка выполнения
+ */
+router.post('/:paymentId/execute', async (req: Request, res: Response) => {
+  try {
+    const { paymentId } = req.params;
+    
+    const payment = await services.paymentService.executePayment(paymentId);
+    
+    if (!payment) {
+      return res.status(404).json({
+        error: 'Payment not found'
+      });
+    }
+
+    return res.status(200).send();
+  } catch (error) {
+    console.error('Error executing payment:', error);
+    return res.status(400).json({
+      error: 'Failed to execute payment',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/v1/payments/{paymentId}/cancel
+ * Отмена платежа
+ * 
+ * @param {string} req.params.paymentId - Идентификатор платежа
+ * 
+ * @returns {Object} 200 - Платеж успешно отменен
+ * @returns {Object} 404 - Платеж не найден
+ * @returns {Object} 400 - Ошибка отмены
+ */
+router.post('/:paymentId/cancel', async (req: Request, res: Response) => {
+  try {
+    const { paymentId } = req.params;
+    
+    const payment = await services.paymentService.cancelPayment(paymentId);
+    
+    if (!payment) {
+      return res.status(404).json({
+        error: 'Payment not found'
+      });
+    }
+
+    return res.status(200).send();
+  } catch (error) {
+    console.error('Error cancelling payment:', error);
+    return res.status(400).json({
+      error: 'Failed to cancel payment',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
