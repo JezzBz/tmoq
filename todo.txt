@@ -224,3 +224,64 @@ Request body schema application/json (пример тела запроса)
 {"beneficiaryId":"61f656e0-0a86-4ec2-bd43-232499f7ad66","amount":90,"tax":5,"purpose":"Назначение платежа","bankDetailsId":"49e46893-9a7e-409b-8c79-647aecaae555","keepOnVirtualAccount":false}
 пример ответа:
 {"dealId":"dd6c3237-9958-47d9-9ba0-f6faeaa0e788","stepId":"c87d3297-f4ae-4f88-add9-6722c1fc0b8c","beneficiaryId":"61f656e0-0a86-4ec2-bd43-232499f7ad66","recipientId":"00021d4e-536f-11ec-ac0b-370ccfeacec2","amount":90,"tax":5,"purpose":"Назначение платежа","bankDetailsId":"49e46893-9a7e-409b-8c79-647aecaae555","keepOnVirtualAccount":false}
+4.Управление сделками
+4.1 POST deals/{dealId}/cancel
+Позволяет перевести сделку в статус CANCELLED, чтобы ее отменить.
+Path parameters  dealId Required 
+4.2 GET deals/{dealId}/is-valid
+Метод для проверки возможности совершения платежа в сделке. Сверяет сумму депонирования с суммой в настройках и проверяет, хватает ли указанных средств на виртуальных счетах депонентов.
+Path parameters dealId Required
+пример ответа"{"isValid":false,"reasons":[{"code":"NO_STEPS_IN_DEAL","description":"Deal contains no steps.","details":{"stepId":"306f557f-2b3c-460d-8429-1d61c59836df"}}]}
+4.3 POST deals/{dealId}/draft
+Позволяет перевести сделку в статус DRAFT. В этом статусе сделку можно редактировать.
+Path parameters dealId Required
+4.4 GET deals
+Позволяет получить список сделок компании.
+Query parameters offset Количество сделок, которое нужно пропустить. Значение по умолчанию — 0  limit Количество сделок, которое нужно вывести. Значение по умолчанию — 50
+пример ответа: {"offset":0,"limit":50,"size":1,"total":1,"results":[{"dealId":"dd6c3237-9958-47d9-9ba0-f6faeaa0e788","accountNumber":"40702810110011000777","status":"DRAFT"}]}
+4.5 POST deals
+Позволяет создать сделку. Вам понадобится номер номинального счета.
+Header parameters Idempotency-Key Required
+Request body schema application/json 
+пример тела запроса {"accountNumber":"40702810110011000777"}
+пример ответа {"dealId":"dd6c3237-9958-47d9-9ba0-f6faeaa0e788","accountNumber":"40702810110011000777","status":"DRAFT"}
+4.6 GET deals/{dealId}
+Метод для получения сделки по ее идентификатору.
+Path parameters dealId Required
+пример ответа {"dealId":"dd6c3237-9958-47d9-9ba0-f6faeaa0e788","accountNumber":"40702810110011000777","status":"DRAFT"}
+4.7 DEL deals/{dealId}
+Позволяет удалить сделку, которая находится в статусе DRAFT.
+4.8 POST deals/{dealId}/accept
+Позволяет перевести сделку в статус ACCEPTED — после DRAFT.
+Path parameters  dealId Required
+5 Управление этапами сделок
+5.1 GET deals/{dealId}/steps
+Позволяет получить список этапов сделки компании.
+Path parameters dealId Required
+Query parameters offset Количество этапов, которое нужно пропустить. Значение по умолчанию — 0. limit Количество этапов, которое необходимо вывести. Значение по умолчанию — 50.
+пример ответа: {"offset":0,"limit":50,"size":1,"total":1,"results":[{"dealId":"dd6c3237-9958-47d9-9ba0-f6faeaa0e788","stepId":"c87d3297-f4ae-4f88-add9-6722c1fc0b8c","stepNumber":1,"description":"Описание этапа сделки","status":"NEW"}]}
+5.2 POST deals/{dealId}/steps 
+Когда сделка создана, нужно создать этап(-ы) сделки для совершения финансовых операций. Если в рамках сделки совершаются только одновременные выплаты, создайте только один этап.
+Path parameters dealId Required 
+Header parameters Idempotency-Key Required
+Request body schema application/json
+пример тела запроса {"description":"Описание этапа сделки"}
+пример ответа {"dealId":"dd6c3237-9958-47d9-9ba0-f6faeaa0e788","stepId":"c87d3297-f4ae-4f88-add9-6722c1fc0b8c","stepNumber":1,"description":"Описание этапа сделки","status":"NEW"}
+5.3 POST deals/{dealId}/steps/{stepId}/complete
+Позволяет завершить этап для совершения выплат конечным получателям — реципиентам (recipients), когда все условия сделки выполнены.
+Path parameters dealId Required stepId Required
+5.4 GET deals/{dealId}/steps/{stepId}
+Метод для получения этапа по ID этапа.
+Path parameters dealId Required  stepId Required
+пример ответа 
+{"dealId":"dd6c3237-9958-47d9-9ba0-f6faeaa0e788","stepId":"c87d3297-f4ae-4f88-add9-6722c1fc0b8c","stepNumber":1,"description":"Описание этапа сделки","status":"NEW"}
+5.5 PUT deals/{dealId}/steps/{stepId}
+Позволяет внести изменения в этап сделки. Только для сделок в статусе DRAFT.
+Path parameters dealId Required  stepId Required 
+Request body schema application/json
+(пример тела запроса)
+{"description":"Описание этапа сделки"}
+пример ответа {"dealId":"dd6c3237-9958-47d9-9ba0-f6faeaa0e788","stepId":"c87d3297-f4ae-4f88-add9-6722c1fc0b8c","stepNumber":1,"description":"Описание этапа сделки","status":"NEW"}
+5.6 DEL deals/{dealId}/steps/{stepId}
+Позволяет удалить этап. Только для сделок в статусе DRAFT.
+Path parameters dealId Required stepId Required

@@ -236,7 +236,7 @@ export class PaymentService extends BaseService<Payment> {
       throw new Error('Deal not found');
     }
 
-    if (deal.beneficiary.beneficiaryId !== beneficiaryId) {
+    if (deal.beneficiary?.beneficiaryId !== beneficiaryId) {
       throw new Error('Beneficiary does not match the deal');
     }
 

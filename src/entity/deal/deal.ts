@@ -21,6 +21,9 @@ export class Deal {
     @Column({ length: 3 })
     currency!: string;
 
+    @Column({ nullable: true })
+    accountNumber?: string;
+
     @Column({
         type: "varchar",
         length: 50,
@@ -28,12 +31,12 @@ export class Deal {
     })
     status!: DealStatus;
 
-    @ManyToOne(() => Beneficiary)
+    @ManyToOne(() => Beneficiary, { nullable: true })
     @JoinColumn({ name: "beneficiaryId" })
-    beneficiary!: Beneficiary;
+    beneficiary?: Beneficiary;
 
-    @Column()
-    beneficiaryId!: string;
+    @Column({ nullable: true })
+    beneficiaryId?: string;
 
     @OneToMany(() => Payment, payment => payment.deal)
     payments?: Payment[];

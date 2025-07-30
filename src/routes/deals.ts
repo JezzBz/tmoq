@@ -5,12 +5,29 @@ const router: Router = Router();
 
 // Базовые CRUD операции для сделок
 
-// POST /api/v1/deals - Создать сделку
+// POST /api/v1/deals - Создать сделку (4.5)
 router.post('/', async (req: Request, res: Response) => {
   try {
+    const idempotencyKey = req.headers['idempotency-key'] as string;
     const dealData = req.body;
     
-    // Валидация обязательных полей
+    if (!idempotencyKey) {
+      return res.status(400).json({
+        error: 'Idempotency-Key header is required'
+      });
+    }
+    
+    // Если передан accountNumber, создаем сделку с номером счета
+    if (dealData.accountNumber) {
+      const deal = await services.dealService.createDealWithAccount(dealData.accountNumber);
+      return res.status(201).json({
+        dealId: deal.dealId,
+        accountNumber: deal.accountNumber,
+        status: deal.status
+      });
+    }
+    
+    // Иначе создаем обычную сделку
     if (!dealData.beneficiaryId || !dealData.title || !dealData.amount || !dealData.currency) {
       return res.status(400).json({
         error: 'beneficiaryId, title, amount, and currency are required'
@@ -35,7 +52,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/deals - Получить все сделки
+// GET /api/v1/deals - Получить все сделки (4.4)
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { offset = 0, limit = 50 } = req.query;
@@ -47,12 +64,19 @@ router.get('/', async (req: Request, res: Response) => {
     const endIndex = startIndex + Number(limit);
     const paginatedDeals = deals.slice(startIndex, endIndex);
     
+    // Форматируем ответ согласно спецификации
+    const formattedDeals = paginatedDeals.map(deal => ({
+      dealId: deal.dealId,
+      accountNumber: deal.accountNumber,
+      status: deal.status
+    }));
+    
     return res.json({
       offset: Number(offset),
       limit: Number(limit),
-      size: paginatedDeals.length,
+      size: formattedDeals.length,
       total: deals.length,
-      results: paginatedDeals
+      results: formattedDeals
     });
   } catch (error) {
     console.error('Error getting deals:', error);
@@ -63,7 +87,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/deals/{dealId} - Получить сделку по ID
+// GET /api/v1/deals/{dealId} - Получить сделку по ID (4.6)
 router.get('/:dealId', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -76,7 +100,12 @@ router.get('/:dealId', async (req: Request, res: Response) => {
       });
     }
 
-    return res.json(deal);
+    // Форматируем ответ согласно спецификации
+    return res.json({
+      dealId: deal.dealId,
+      accountNumber: deal.accountNumber,
+      status: deal.status
+    });
   } catch (error) {
     console.error('Error getting deal:', error);
     return res.status(500).json({
@@ -110,7 +139,7 @@ router.put('/:dealId', async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/v1/deals/{dealId} - Удалить сделку
+// DELETE /api/v1/deals/{dealId} - Удалить сделку (4.7)
 router.delete('/:dealId', async (req: Request, res: Response) => {
   try {
     const { dealId } = req.params;
@@ -468,4 +497,92 @@ router.post('/:dealId/steps/:stepId/recipients', async (req: Request, res: Respo
   }
 });
 
-export default router; 
+export default router;
+
+// Маршруты управления сделками
+
+// 4.1 POST /api/v1/deals/{dealId}/cancel - Отменить сделку
+router.post('/:dealId/cancel', async (req: Request, res: Response) => {
+  try {
+    const { dealId } = req.params;
+    
+    const deal = await services.dealService.cancelDeal(dealId);
+    
+    if (!deal) {
+      return res.status(404).json({
+        error: 'Deal not found'
+      });
+    }
+
+    return res.status(200).send();
+  } catch (error) {
+    console.error('Error cancelling deal:', error);
+    return res.status(400).json({
+      error: 'Failed to cancel deal',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 4.2 GET /api/v1/deals/{dealId}/is-valid - Проверить валидность сделки
+router.get('/:dealId/is-valid', async (req: Request, res: Response) => {
+  try {
+    const { dealId } = req.params;
+    
+    const validationResult = await services.dealService.isDealValid(dealId);
+    
+    return res.json(validationResult);
+  } catch (error) {
+    console.error('Error validating deal:', error);
+    return res.status(500).json({
+      error: 'Failed to validate deal',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 4.3 POST /api/v1/deals/{dealId}/draft - Перевести сделку в статус DRAFT
+router.post('/:dealId/draft', async (req: Request, res: Response) => {
+  try {
+    const { dealId } = req.params;
+    
+    const deal = await services.dealService.moveToDraft(dealId);
+    
+    if (!deal) {
+      return res.status(404).json({
+        error: 'Deal not found'
+      });
+    }
+
+    return res.status(200).send();
+  } catch (error) {
+    console.error('Error moving deal to draft:', error);
+    return res.status(400).json({
+      error: 'Failed to move deal to draft',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// 4.8 POST /api/v1/deals/{dealId}/accept - Принять сделку
+router.post('/:dealId/accept', async (req: Request, res: Response) => {
+  try {
+    const { dealId } = req.params;
+    
+    const deal = await services.dealService.acceptDeal(dealId);
+    
+    if (!deal) {
+      return res.status(404).json({
+        error: 'Deal not found'
+      });
+    }
+
+    return res.status(200).send();
+  } catch (error) {
+    console.error('Error accepting deal:', error);
+    return res.status(400).json({
+      error: 'Failed to accept deal',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}); 

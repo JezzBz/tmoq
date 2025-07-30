@@ -67,6 +67,139 @@ export class DealService extends BaseService<Deal> {
     return await this.findById(id);
   }
 
+  // Методы управления сделками
+
+  async cancelDeal(id: string): Promise<Deal | null> {
+    const deal = await this.findById(id);
+    if (!deal) {
+      throw new Error('Deal not found');
+    }
+
+    if (deal.status === DealStatus.COMPLETED) {
+      throw new Error('Completed deals cannot be cancelled');
+    }
+
+    await this.repository.update({ dealId: id }, { status: DealStatus.CANCELLED });
+    return await this.findById(id);
+  }
+
+  async moveToDraft(id: string): Promise<Deal | null> {
+    const deal = await this.findById(id);
+    if (!deal) {
+      throw new Error('Deal not found');
+    }
+
+    if (deal.status === DealStatus.COMPLETED) {
+      throw new Error('Completed deals cannot be moved to draft');
+    }
+
+    await this.repository.update({ dealId: id }, { status: DealStatus.DRAFT });
+    return await this.findById(id);
+  }
+
+  async acceptDeal(id: string): Promise<Deal | null> {
+    const deal = await this.findById(id);
+    if (!deal) {
+      throw new Error('Deal not found');
+    }
+
+    if (deal.status !== DealStatus.DRAFT) {
+      throw new Error('Only draft deals can be accepted');
+    }
+
+    await this.repository.update({ dealId: id }, { status: DealStatus.ACCEPTED });
+    return await this.findById(id);
+  }
+
+  async isDealValid(id: string): Promise<{ isValid: boolean; reasons: Array<{ code: string; description: string; details?: any }> }> {
+    const deal = await this.findById(id);
+    if (!deal) {
+      return {
+        isValid: false,
+        reasons: [{ code: 'DEAL_NOT_FOUND', description: 'Deal not found' }]
+      };
+    }
+
+    const reasons: Array<{ code: string; description: string; details?: any }> = [];
+
+    // Проверяем наличие этапов
+    const steps = await this.stepRepository.find({
+      where: { deal: { dealId: id } }
+    });
+
+    if (steps.length === 0) {
+      reasons.push({
+        code: 'NO_STEPS_IN_DEAL',
+        description: 'Deal contains no steps.',
+        details: { dealId: id }
+      });
+    }
+
+    // Проверяем каждый этап
+    for (const step of steps) {
+      const deponents = await this.deponentRepository.find({
+        where: { step: { stepId: step.stepId } }
+      });
+
+      const recipients = await this.recipientRepository.find({
+        where: { step: { stepId: step.stepId } }
+      });
+
+      // Проверяем сумму депонирования
+      const totalDeposited = deponents.reduce((sum, deponent) => sum + Number(deponent.amount), 0);
+      const totalRequired = recipients.reduce((sum, recipient) => sum + Number(recipient.amount), 0);
+
+      if (totalDeposited < totalRequired) {
+        reasons.push({
+          code: 'INSUFFICIENT_DEPOSITS',
+          description: `Insufficient deposits for step ${step.stepId}. Required: ${totalRequired}, Deposited: ${totalDeposited}`,
+          details: { stepId: step.stepId, required: totalRequired, deposited: totalDeposited }
+        });
+      }
+
+      // Проверяем наличие депонентов
+      if (deponents.length === 0) {
+        reasons.push({
+          code: 'NO_DEPONENTS_IN_STEP',
+          description: `Step ${step.stepId} has no deponents.`,
+          details: { stepId: step.stepId }
+        });
+      }
+
+      // Проверяем наличие реципиентов
+      if (recipients.length === 0) {
+        reasons.push({
+          code: 'NO_RECIPIENTS_IN_STEP',
+          description: `Step ${step.stepId} has no recipients.`,
+          details: { stepId: step.stepId }
+        });
+      }
+    }
+
+    return {
+      isValid: reasons.length === 0,
+      reasons
+    };
+  }
+
+  async createDealWithAccount(accountNumber: string): Promise<Deal> {
+    // Валидация номера счета
+    if (!accountNumber || !/^\d{20}|\d{22}$/.test(accountNumber)) {
+      throw new Error('Invalid account number format. Must be 20 or 22 digits.');
+    }
+
+    const deal = this.repository.create({
+      accountNumber,
+      status: DealStatus.DRAFT,
+      title: `Deal for account ${accountNumber}`,
+      description: `Deal created for account ${accountNumber}`,
+      amount: 0,
+      currency: 'RUB'
+    });
+
+    return await this.repository.save(deal);
+  }
+
   async deleteDeal(id: string): Promise<boolean> {
     const deal = await this.findById(id);
     if (!deal) {
@@ -94,34 +227,6 @@ export class DealService extends BaseService<Deal> {
     }
 
     await this.repository.update({ dealId: id }, { status: DealStatus.CONFIRMED });
-    return await this.findById(id);
-  }
-
-  async moveToDraft(id: string): Promise<Deal | null> {
-    const deal = await this.findById(id);
-    if (!deal) {
-      throw new Error('Deal not found');
-    }
-
-    if (deal.status === DealStatus.COMPLETED) {
-      throw new Error('Completed deals cannot be moved to draft');
-    }
-
-    await this.repository.update({ dealId: id }, { status: DealStatus.DRAFT });
-    return await this.findById(id);
-  }
-
-  async cancelDeal(id: string): Promise<Deal | null> {
-    const deal = await this.findById(id);
-    if (!deal) {
-      throw new Error('Deal not found');
-    }
-
-    if (deal.status === DealStatus.COMPLETED) {
-      throw new Error('Completed deals cannot be cancelled');
-    }
-
-    await this.repository.update({ dealId: id }, { status: DealStatus.CANCELLED });
     return await this.findById(id);
   }
 
